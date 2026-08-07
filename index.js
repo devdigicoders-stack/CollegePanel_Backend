@@ -16,7 +16,7 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:3000',
   'https://college-panel-admin.vercel.app',
-  'https://college-panel-super-admin.vercel.app/'
+  'https://college-panel-super-admin.vercel.app'
 ];
 
 app.use(cors({
