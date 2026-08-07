@@ -1,0 +1,458 @@
+const College = require('../models/College');
+const Teacher = require('../models/Teacher');
+const Department = require('../models/Department');
+const AttendanceRecord = require('../models/AttendanceRecord');
+const FeePayment = require('../models/FeePayment');
+const Examination = require('../models/Examination');
+const HostelRoom = require('../models/HostelRoom');
+const LibraryBook = require('../models/LibraryBook');
+const Employee = require('../models/Employee');
+const Enquiry = require('../models/Enquiry');
+const Notice = require('../models/Notice');
+const Student = require('../models/Student');
+const Admission = require('../models/Admission');
+
+// @desc    Create a new college
+// @route   POST /api/colleges
+// @access  Private/SuperAdmin
+exports.createCollege = async (req, res) => {
+  try {
+    const {
+      collegeName,
+      collegeCode,
+      collegeType,
+      aicteCode,
+      affiliationNumber,
+      establishedYear,
+      contactNumber,
+      website,
+      officialEmail,
+      address,
+      city,
+      district,
+      state,
+      pinCode,
+      principalName,
+      principalEmail,
+      principalQualification,
+      adminName,
+      adminEmail,
+      adminMobile,
+      username,
+      password
+    } = req.body;
+
+    // Check if college code already exists
+    const codeExists = await College.findOne({ collegeCode });
+    if (codeExists) {
+      return res.status(400).json({ message: 'College code already exists' });
+    }
+
+    // Check if admin email already exists
+    const emailExists = await College.findOne({ adminEmail });
+    if (emailExists) {
+      return res.status(400).json({ message: 'Admin email already exists' });
+    }
+
+    // Check if username already exists
+    const usernameExists = await College.findOne({ username });
+    if (usernameExists) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    // Handle logo file upload
+    let collegeLogo = '';
+    if (req.file) {
+      collegeLogo = `/uploads/${req.file.filename}`;
+    }
+
+    // Create the college
+    const college = await College.create({
+      collegeName,
+      collegeCode,
+      collegeType: collegeType ? collegeType.charAt(0).toUpperCase() + collegeType.slice(1).toLowerCase() : undefined,
+      aicteCode: aicteCode || '',
+      affiliationNumber: affiliationNumber || '',
+      establishedYear: establishedYear || '',
+      contactNumber: contactNumber || '',
+      website: website || '',
+      officialEmail: officialEmail || '',
+      collegeLogo,
+      address: address || '',
+      city: city || '',
+      district: district || '',
+      state: state || '',
+      pinCode: pinCode || '',
+      principalName: principalName || '',
+      principalEmail: principalEmail || '',
+      principalQualification: principalQualification || '',
+      adminName,
+      adminEmail,
+      adminMobile: adminMobile || '',
+      username,
+      password,
+      rawPassword: password,
+      isActive: true
+    });
+
+    if (college) {
+      res.status(201).json({
+        message: 'College created successfully',
+        college: {
+          _id: college._id,
+          collegeName: college.collegeName,
+          collegeCode: college.collegeCode,
+          adminEmail: college.adminEmail
+        }
+      });
+    } else {
+      res.status(400).json({ message: 'Invalid college data' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Get all colleges
+// @route   GET /api/colleges
+// @access  Private/SuperAdmin
+exports.getAllColleges = async (req, res) => {
+  try {
+    const colleges = await College.find({}).sort({ createdAt: -1 }).lean();
+    
+    // Fetch dynamic student counts for each college
+    const collegesWithCounts = await Promise.all(colleges.map(async (college) => {
+      const studentsCount = await Student.countDocuments({ collegeId: college._id });
+      return {
+        ...college,
+        studentsCount
+      };
+    }));
+    
+    res.json(collegesWithCounts);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Toggle college status
+// @route   PATCH /api/colleges/:id/status
+// @access  Private/SuperAdmin
+exports.toggleCollegeStatus = async (req, res) => {
+  try {
+    const college = await College.findById(req.params.id);
+    if (college) {
+      college.isActive = !college.isActive;
+      await college.save();
+      res.json({ message: 'College status updated', isActive: college.isActive });
+    } else {
+      res.status(404).json({ message: 'College not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Delete college
+// @route   DELETE /api/colleges/:id
+// @access  Private/SuperAdmin
+exports.deleteCollege = async (req, res) => {
+  try {
+    const college = await College.findById(req.params.id);
+    if (college) {
+      await College.findByIdAndDelete(req.params.id);
+      res.json({ message: 'College removed successfully' });
+    } else {
+      res.status(404).json({ message: 'College not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Get college by ID
+// @route   GET /api/colleges/:id
+// @access  Private/SuperAdmin
+exports.getCollegeById = async (req, res) => {
+  try {
+    const college = await College.findById(req.params.id);
+    if (college) {
+      res.json(college);
+    } else {
+      res.status(404).json({ message: 'College not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Update college
+// @route   PUT /api/colleges/:id
+// @access  Private/SuperAdmin
+exports.updateCollege = async (req, res) => {
+  try {
+    const {
+      collegeName,
+      collegeCode,
+      collegeType,
+      aicteCode,
+      affiliationNumber,
+      establishedYear,
+      contactNumber,
+      website,
+      officialEmail,
+      address,
+      city,
+      district,
+      state,
+      pinCode,
+      principalName,
+      principalEmail,
+      principalQualification,
+      adminName,
+      adminEmail,
+      adminMobile,
+      username,
+      password
+    } = req.body;
+
+    const college = await College.findById(req.params.id);
+
+    if (!college) {
+      return res.status(404).json({ message: 'College not found' });
+    }
+
+    // Check for duplicate collegeCode in other colleges
+    if (collegeCode && collegeCode !== college.collegeCode) {
+      const codeExists = await College.findOne({ collegeCode, _id: { $ne: college._id } });
+      if (codeExists) {
+        return res.status(400).json({ message: 'College code already exists' });
+      }
+    }
+
+    // Check for duplicate adminEmail in other colleges
+    if (adminEmail && adminEmail !== college.adminEmail) {
+      const emailExists = await College.findOne({ adminEmail, _id: { $ne: college._id } });
+      if (emailExists) {
+        return res.status(400).json({ message: 'Admin email already exists' });
+      }
+    }
+
+    // Check for duplicate username in other colleges
+    if (username && username !== college.username) {
+      const usernameExists = await College.findOne({ username, _id: { $ne: college._id } });
+      if (usernameExists) {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+    }
+
+    // Update fields
+    college.collegeName = collegeName || college.collegeName;
+    college.collegeCode = collegeCode || college.collegeCode;
+    college.collegeType = collegeType ? collegeType.charAt(0).toUpperCase() + collegeType.slice(1).toLowerCase() : college.collegeType;
+    college.aicteCode = aicteCode !== undefined ? aicteCode : college.aicteCode;
+    college.affiliationNumber = affiliationNumber !== undefined ? affiliationNumber : college.affiliationNumber;
+    college.establishedYear = establishedYear !== undefined ? establishedYear : college.establishedYear;
+    college.contactNumber = contactNumber !== undefined ? contactNumber : college.contactNumber;
+    college.website = website !== undefined ? website : college.website;
+    college.officialEmail = officialEmail !== undefined ? officialEmail : college.officialEmail;
+    college.address = address !== undefined ? address : college.address;
+    college.city = city !== undefined ? city : college.city;
+    college.district = district !== undefined ? district : college.district;
+    college.state = state !== undefined ? state : college.state;
+    college.pinCode = pinCode !== undefined ? pinCode : college.pinCode;
+    college.principalName = principalName !== undefined ? principalName : college.principalName;
+    college.principalEmail = principalEmail !== undefined ? principalEmail : college.principalEmail;
+    college.principalQualification = principalQualification !== undefined ? principalQualification : college.principalQualification;
+    college.adminName = adminName || college.adminName;
+    college.adminEmail = adminEmail || college.adminEmail;
+    college.adminMobile = adminMobile !== undefined ? adminMobile : college.adminMobile;
+    college.username = username || college.username;
+    
+    // Only update password if a new one is provided
+    if (password && password.trim() !== '') {
+      college.password = password;
+      college.rawPassword = password; // Update plaintext password
+    }
+
+    // Handle logo file upload
+    if (req.file) {
+      college.collegeLogo = `/uploads/${req.file.filename}`;
+    }
+
+    const updatedCollege = await college.save();
+
+    res.json({
+      message: 'College updated successfully',
+      college: updatedCollege
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Get dynamic details by category
+// @route   GET /api/colleges/:id/details/:category
+// @access  Private/SuperAdmin
+exports.getCollegeCategoryDetails = async (req, res) => {
+  try {
+    const { id, category } = req.params;
+    
+    // Direct model mapping for categories that don't need complex mapping
+    const directModelMap = {
+      'teachers': Teacher,
+      'departments': Department,
+      'examinations': Examination,
+      'employees': Employee,
+      'students': Student,
+      'admissions': Admission,
+      'fees': FeePayment
+    };
+
+    const cat = category.toLowerCase();
+
+    if (directModelMap[cat]) {
+      let query = { collegeId: id };
+
+      // Apply dynamic filters if category is students
+      if (cat === 'students') {
+        const { branch, year, session, course, search } = req.query;
+        if (branch && branch !== 'All Branches' && branch !== 'All Departments' && branch !== '') query.branch = branch;
+        if (year && year !== 'All Years' && year !== '') query.year = year;
+        if (session && session !== 'All Sessions' && session !== '') query.session = session;
+        if (course && course !== 'All Courses' && course !== '') query.course = course;
+        
+        if (search && search !== '') {
+          query.$or = [
+            { studentName: { $regex: search, $options: 'i' } },
+            { studentId: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } },
+            { branch: { $regex: search, $options: 'i' } }
+          ];
+        }
+      }
+
+      const data = await directModelMap[cat].find(query).sort({ createdAt: -1 });
+      return res.json(data);
+    }
+
+    // Custom mapping for other categories
+    let mappedData = [];
+
+    switch (cat) {
+      case 'attendance':
+        // Aggregate AttendanceRecord by date to match the dummy model schema
+        const attendanceRecords = await AttendanceRecord.aggregate([
+          { $match: { collegeId: new require('mongoose').Types.ObjectId(id) } },
+          {
+            $group: {
+              _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+              present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
+              total: { $sum: 1 }
+            }
+          },
+          { $sort: { _id: -1 } }
+        ]);
+        
+        mappedData = attendanceRecords.map(record => ({
+          _id: record._id,
+          date: new Date(record._id),
+          present: record.present,
+          total: record.total,
+          status: 'Completed'
+        }));
+        break;
+
+      case 'hostel':
+        const rooms = await HostelRoom.find({ collegeId: id }).sort({ createdAt: -1 });
+        mappedData = rooms.map(r => ({
+          _id: r._id,
+          blockName: r.blockName,
+          capacity: r.capacity,
+          warden: 'Not Assigned' // Fallback for UI
+        }));
+        break;
+
+      case 'library':
+        const books = await LibraryBook.find({ collegeId: id }).sort({ createdAt: -1 });
+        mappedData = books.map(b => ({
+          _id: b._id,
+          bookName: b.title,
+          author: b.author,
+          availableCopies: b.availableCopies
+        }));
+        break;
+
+      case 'leads':
+        const leads = await Enquiry.find({ collegeId: id }).sort({ createdAt: -1 });
+        mappedData = leads.map(l => ({
+          _id: l._id,
+          studentName: l.studentName,
+          source: l.enquirySource || 'Website',
+          status: l.status
+        }));
+        break;
+
+      case 'activity':
+        const notices = await Notice.find({ collegeId: id }).sort({ createdAt: -1 });
+        mappedData = notices.map(n => ({
+          _id: n._id,
+          activityName: n.title,
+          date: n.dateOfPublishing,
+          description: n.details
+        }));
+        break;
+
+      default:
+        return res.status(400).json({ message: 'Invalid category' });
+    }
+
+    res.json(mappedData);
+  } catch (error) {
+    res.status(500).json({ message: "Server error fetching category data", error: error.message });
+  }
+};
+
+// @desc    Get dynamic filters for a college category (e.g. students)
+// @route   GET /api/colleges/:id/details/:category/filters
+// @access  Private/SuperAdmin
+exports.getCollegeCategoryFilters = async (req, res) => {
+  try {
+    const { id, category } = req.params;
+    
+    if (category.toLowerCase() === 'students') {
+      const match = { collegeId: new (require('mongoose').Types.ObjectId)(id) };
+      // Note: We need to import Student at the top if it's not imported. Wait, Student is imported in directModelMap?
+      // Let's use directModelMap if possible, but it's defined inside the other function.
+      const Student = require('../models/Student');
+
+      const [branches, years, sessions, courses] = await Promise.all([
+        Student.distinct('branch', match),
+        Student.distinct('year', match),
+        Student.distinct('session', match),
+        Student.distinct('course', match)
+      ]);
+      
+      const cleanAndSort = (arr) => arr.filter(Boolean).sort();
+      
+      const currentYear = new Date().getFullYear();
+      const dynamicSessions = [];
+      for (let i = currentYear - 4; i <= currentYear + 2; i++) {
+        dynamicSessions.push(`${i}-${(i + 1).toString().slice(-2)}`);
+      }
+      const allSessions = [...new Set([...dynamicSessions, ...sessions])];
+      
+      return res.json({
+        branches: cleanAndSort(branches),
+        years: cleanAndSort(years),
+        sessions: cleanAndSort(allSessions),
+        courses: cleanAndSort(courses)
+      });
+    }
+
+    res.json({});
+  } catch (error) {
+    res.status(500).json({ message: 'Server error fetching filters', error: error.message });
+  }
+};
