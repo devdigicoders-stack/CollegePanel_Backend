@@ -30,7 +30,12 @@ const buildDateFilter = (startDate, endDate, field = 'createdAt') => {
 
 exports.getAdmissionsReport = async (req, res) => {
   try {
-    const { reportType, startDate, endDate } = req.query;
+    // If a superadmin hits this route, redirect to the superadmin-specific handler
+    if (req.superAdmin) {
+      return exports.getAdmissionReports(req, res);
+    }
+
+    const { reportType, startDate, endDate, course, branch, status } = req.query;
     const collegeId = req.college._id;
     const dateFilter = buildDateFilter(startDate, endDate, 'createdAt');
     const baseFilter = { collegeId, ...dateFilter };
@@ -441,7 +446,8 @@ exports.getSecurityReport = async (req, res) => {
 // Backward compat — old routes
 exports.getStudentReports = async (req, res) => {
   try {
-    const students = await Student.find({ collegeId: req.query.collegeId }).sort({ createdAt: -1 });
+    const filter = req.query.collegeId ? { collegeId: req.query.collegeId } : {};
+    const students = await Student.find(filter).populate('collegeId', 'collegeName').sort({ createdAt: -1 });
     res.json(students);
   } catch (error) {
     res.status(500).json({ message: 'Error', error: error.message });
@@ -450,7 +456,8 @@ exports.getStudentReports = async (req, res) => {
 
 exports.getAdmissionReports = async (req, res) => {
   try {
-    const admissions = await Admission.find({ collegeId: req.query.collegeId }).sort({ createdAt: -1 });
+    const filter = req.query.collegeId ? { collegeId: req.query.collegeId } : {};
+    const admissions = await Admission.find(filter).populate('collegeId', 'collegeName').sort({ createdAt: -1 });
     res.json(admissions);
   } catch (error) {
     res.status(500).json({ message: 'Error', error: error.message });

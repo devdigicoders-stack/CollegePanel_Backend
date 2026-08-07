@@ -53,6 +53,14 @@ const collegeProtect = async (req, res, next) => {
         return res.status(401).json({ message: 'Invalid token structure' });
       }
 
+      // 0. Check if it's a Super Admin
+      const superAdmin = await SuperAdmin.findById(decoded.id);
+      if (superAdmin) {
+        req.superAdmin = superAdmin;
+        req.userRole = 'Super Admin';
+        return next();
+      }
+
       // 1. Check if it's a direct college admin account
       let college = await College.findById(decoded.id);
       if (college) {
