@@ -5,7 +5,7 @@ const facultyAttendanceSchema = new mongoose.Schema({
   records: [{
     facultyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
     name: { type: String, required: true },
-    status: { type: String, enum: ['Present', 'Absent', 'On Leave'], default: 'Present' },
+    status: { type: String, enum: ['Present', 'Absent', 'On Leave', 'Half Day'], default: 'Present' },
     remarks: { type: String, default: '' }
   }],
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true }

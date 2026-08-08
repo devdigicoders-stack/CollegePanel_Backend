@@ -20,6 +20,20 @@ const collegeSchema = new mongoose.Schema({
   district: { type: String, default: '' },
   state: { type: String, default: '' },
   pinCode: { type: String, default: '' },
+  
+  // Geofence Location
+  location: {
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    radius: { type: Number, default: 50 } // radius in meters
+  },
+
+  // Attendance Settings
+  attendanceSettings: {
+    shiftStartTime: { type: String, default: '09:00' }, // HH:mm format
+    shiftEndTime: { type: String, default: '17:00' }, // HH:mm format
+    lateThresholdMinutes: { type: Number, default: 15 } // Minutes late allowed before Half Day
+  },
 
   // Principal Information
   principalName: { type: String, default: '' },

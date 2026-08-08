@@ -59,7 +59,10 @@ exports.getDashboardStats = async (req, res) => {
     const submittedIds = submissions.map(s => s.assignmentId.toString());
     const pendingAssignments = await Assignment.countDocuments({
       collegeId,
-      course: { $in: [req.student.course, req.student.branch] },
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ],
       _id: { $nin: submittedIds },
       dueDate: { $gte: new Date() }
     });
@@ -67,7 +70,10 @@ exports.getDashboardStats = async (req, res) => {
     // Upcoming Exams
     const upcomingExams = await Examination.countDocuments({
       collegeId,
-      course: { $in: [req.student.course, req.student.branch] },
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ],
       date: { $gte: new Date() }
     });
 
@@ -111,7 +117,10 @@ exports.getDashboardStats = async (req, res) => {
 exports.getSubjects = async (req, res) => {
   try {
     const subjects = await Subject.find({ 
-      courseName: { $in: [req.student.course, req.student.branch] }, 
+      $or: [
+        { courseName: { $regex: new RegExp(req.student.course, 'i') } },
+        { courseName: { $regex: new RegExp(req.student.branch, 'i') } }
+      ],
       collegeId: req.college._id 
     });
     res.status(200).json(subjects);
@@ -124,7 +133,10 @@ exports.getSubjects = async (req, res) => {
 exports.getTimetable = async (req, res) => {
   try {
     const timetable = await Timetable.find({ 
-      course: { $in: [req.student.course, req.student.branch] },
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ],
       collegeId: req.college._id 
     }).sort({ day: 1 });
 
@@ -150,7 +162,10 @@ exports.getAssignments = async (req, res) => {
   try {
     // Only get assignments for student's course/branch
     const assignments = await Assignment.find({ 
-      course: { $in: [req.student.course, req.student.branch] }, 
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ],
       collegeId: req.college._id 
     })
       .populate('teacherId', 'name')
@@ -220,7 +235,10 @@ exports.getExams = async (req, res) => {
   try {
     const exams = await Examination.find({ 
       collegeId: req.college._id,
-      course: { $in: [req.student.course, req.student.branch] }
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ]
     }).sort({ date: 1 });
     // In CRM course name might be mapped differently, fallback to basic logic
     // Actually just fetch all for college but filter by upcoming
@@ -266,7 +284,12 @@ exports.getFees = async (req, res) => {
   try {
     const feeDetails = await StudentFee.findOne({ studentId: req.student._id, collegeId: req.college._id });
     const payments = await FeePayment.find({ studentId: req.student._id, collegeId: req.college._id }).sort({ date: -1 });
-    res.status(200).json({ feeDetails, payments });
+    res.status(200).json({ 
+      feeDetails, 
+      payments, 
+      college: req.college,
+      student: { name: req.student.studentName, rollNo: req.student.studentId } 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching fees', error: error.message });
   }
@@ -579,7 +602,10 @@ const StudyMaterial = require('../models/StudyMaterial');
 exports.getStudyMaterials = async (req, res) => {
   try {
     const materials = await StudyMaterial.find({ 
-      course: { $in: [req.student.course, req.student.branch] }, 
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ],
       collegeId: req.college._id 
     }).sort({ createdAt: -1 });
     res.status(200).json(materials);

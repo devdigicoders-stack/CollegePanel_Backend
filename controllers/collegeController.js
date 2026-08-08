@@ -39,7 +39,10 @@ exports.createCollege = async (req, res) => {
       adminEmail,
       adminMobile,
       username,
-      password
+      password,
+      lat,
+      lng,
+      radius
     } = req.body;
 
     // Check if college code already exists
@@ -92,7 +95,12 @@ exports.createCollege = async (req, res) => {
       username,
       password,
       rawPassword: password,
-      isActive: true
+      isActive: true,
+      location: {
+        lat: lat ? Number(lat) : null,
+        lng: lng ? Number(lng) : null,
+        radius: radius ? Number(radius) : 50
+      }
     });
 
     if (college) {
@@ -140,9 +148,18 @@ exports.getAllColleges = async (req, res) => {
 // @access  Private/SuperAdmin
 exports.toggleCollegeStatus = async (req, res) => {
   try {
+    const { isActive, lat, lng, radius } = req.body;
     const college = await College.findById(req.params.id);
     if (college) {
-      college.isActive = !college.isActive;
+      if (isActive !== undefined) college.isActive = isActive;
+    
+      if (lat !== undefined || lng !== undefined || radius !== undefined) {
+        college.location = {
+          lat: lat !== undefined ? Number(lat) : college.location?.lat,
+          lng: lng !== undefined ? Number(lng) : college.location?.lng,
+          radius: radius !== undefined ? Number(radius) : (college.location?.radius || 50)
+        };
+      }
       await college.save();
       res.json({ message: 'College status updated', isActive: college.isActive });
     } else {
@@ -213,7 +230,10 @@ exports.updateCollege = async (req, res) => {
       adminEmail,
       adminMobile,
       username,
-      password
+      password,
+      lat,
+      lng,
+      radius
     } = req.body;
 
     const college = await College.findById(req.params.id);
@@ -273,6 +293,14 @@ exports.updateCollege = async (req, res) => {
     if (password && password.trim() !== '') {
       college.password = password;
       college.rawPassword = password; // Update plaintext password
+    }
+    
+    if (lat !== undefined || lng !== undefined || radius !== undefined) {
+      college.location = {
+        lat: lat !== undefined ? Number(lat) : college.location?.lat,
+        lng: lng !== undefined ? Number(lng) : college.location?.lng,
+        radius: radius !== undefined ? Number(radius) : (college.location?.radius || 50)
+      };
     }
 
     // Handle logo file upload

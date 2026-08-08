@@ -140,7 +140,7 @@ exports.getFeeCollections = async (req, res) => {
       if (endDate) { const end = new Date(endDate); end.setHours(23, 59, 59, 999); filter.date.$lte = end; }
     }
     const data = await FeePayment.find(filter).sort({ date: -1 });
-    res.json({ success: true, count: data.length, data });
+    res.json({ success: true, count: data.length, data, college: req.college });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -783,7 +783,7 @@ exports.getReceipts = async (req, res) => {
     // Sort combined data descending by date
     data.sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    res.json({ success: true, count: data.length, data });
+    res.json({ success: true, count: data.length, data, college: req.college });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

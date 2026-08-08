@@ -48,6 +48,8 @@ const teacherRoutes = require('./routes/teacherRoutes');
 const designationRoutes = require('./routes/designationRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
+const payrollRoutes = require('./routes/payrollRoutes');
+const punchRoutes = require('./routes/punchRoutes');
 const libraryRoutes = require('./routes/libraryRoutes');
 const hostelRoutes = require('./routes/hostelRoutes');
 const securityRoutes = require('./routes/securityRoutes');
@@ -84,6 +86,8 @@ app.use('/api/academics', academicsRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/designations', designationRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/punch', punchRoutes);
 app.use('/api/report', reportRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/mess', messRoutes);
@@ -111,6 +115,7 @@ app.use('/api/placement', placementRoutes);
 app.use('/api/mess', messRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/study-materials', studyMaterialRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
