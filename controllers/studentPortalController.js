@@ -76,6 +76,12 @@ exports.getDashboardStats = async (req, res) => {
       collegeId,
       $or: queryOr
     }) : 0;
+    
+    const StudyMaterial = require('../models/StudyMaterial');
+    const totalMaterials = queryOr.length > 0 ? await StudyMaterial.countDocuments({
+      collegeId,
+      $or: queryOr
+    }) : 0;
 
     if (isApplicant) {
       return res.json({
@@ -83,7 +89,9 @@ exports.getDashboardStats = async (req, res) => {
         totalClasses: 0,
         presentClasses: 0,
         pendingAssignments: 0,
+        submittedAssignments: 0,
         totalAssignments,
+        totalMaterials,
         attendance: 0,
         assignments: 0,
         studyMaterials: 0,
@@ -117,7 +125,9 @@ exports.getDashboardStats = async (req, res) => {
       totalClasses: total,
       presentClasses: present,
       pendingAssignments,
-      totalAssignments
+      submittedAssignments: submittedIds.length,
+      totalAssignments,
+      totalMaterials
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching dashboard stats', error: error.message });
@@ -349,11 +359,16 @@ const StudyMaterial = require('../models/StudyMaterial');
 // Get Study Materials
 exports.getStudyMaterials = async (req, res) => {
   try {
+    const queryOr = [];
+    if (req.student.course) queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
+    if (req.student.branch) queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
+
+    if (queryOr.length === 0) {
+      return res.status(200).json([]);
+    }
+
     const materials = await StudyMaterial.find({ 
-      $or: [
-        { course: { $regex: new RegExp(req.student.course, 'i') } },
-        { course: { $regex: new RegExp(req.student.branch, 'i') } }
-      ],
+      $or: queryOr,
       collegeId: req.college._id 
     }).sort({ createdAt: -1 });
     res.status(200).json(materials);
