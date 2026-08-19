@@ -1,5 +1,42 @@
 const Role = require('../models/Role');
 
+// Helper to ensure default roles exist for a college
+const ensureDefaultRoles = async (collegeId) => {
+  const defaultRoles = [
+    {
+      name: 'Teacher',
+      description: 'Default role for teaching staff',
+      department: 'Academic',
+      permissions: ['View Dashboard', 'View Students', 'View Subjects', 'View Sections', 'View Assignments', 'Add Assignment', 'Edit Assignment', 'Delete Assignment', 'Grade Assignment', 'Enter Marks', 'View Results']
+    },
+    {
+      name: 'Student',
+      description: 'Default role for enrolled students',
+      department: 'Academic',
+      permissions: ['View Portal Dashboard', 'Submit Course Assignments', 'View Semester Results', 'Apply For Outings']
+    },
+    {
+      name: 'HOD',
+      description: 'Head of Department',
+      department: 'Academic',
+      permissions: ['View Dashboard', 'View Students', 'View Teachers', 'View Departments', 'View Courses', 'View Subjects', 'View Sections', 'View Assignments', 'View Results', 'View Employees']
+    },
+    {
+      name: 'Hostel',
+      description: 'Hostel Warden or Manager',
+      department: 'Hostel',
+      permissions: ['View Dashboard', 'View Hostels', 'Manage Rooms', 'Manage Allocations', 'View Hostel Reports', 'Approve Leave Outing', 'Reject Leave Outing', 'Log Check In', 'Log Check Out', 'Manage Hostel Inventory', 'Add Hostel Notice', 'View Students']
+    }
+  ];
+
+  for (const roleDef of defaultRoles) {
+    const exists = await Role.findOne({ name: roleDef.name, collegeId });
+    if (!exists) {
+      await Role.create({ ...roleDef, collegeId, status: 'Active' });
+    }
+  }
+};
+
 // Get all roles
 exports.getAllRoles = async (req, res) => {
   try {
@@ -8,6 +45,9 @@ exports.getAllRoles = async (req, res) => {
     }
 
     const collegeId = req.college._id;
+    
+    // Ensure default roles exist before returning the list
+    await ensureDefaultRoles(collegeId);
     
     // Parse query parameters
     const page = parseInt(req.query.page) || 1;
@@ -48,6 +88,9 @@ exports.getRolesList = async (req, res) => {
     }
 
     const collegeId = req.college._id;
+    
+    // Ensure default roles exist before returning the list
+    await ensureDefaultRoles(collegeId);
     const roles = await Role.find({ collegeId, status: 'Active' }).select('name').sort({ name: 1 });
     
     const roleNames = roles.map(r => r.name);

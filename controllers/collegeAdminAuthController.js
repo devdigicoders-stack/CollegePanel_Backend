@@ -118,6 +118,27 @@ exports.loginCollegeAdmin = async (req, res) => {
       });
     }
 
+    // 5. Try to login as Applicant (Public Admission)
+    const Admission = require('../models/Admission');
+    const applicant = await Admission.findOne({ appNo: username });
+    if (applicant) {
+      // For applicant, password is DOB in YYYY-MM-DD format
+      const dobStr = applicant.dob ? new Date(applicant.dob).toISOString().split('T')[0] : null;
+      if (password === dobStr) {
+        const collegeDetail = await College.findById(applicant.collegeId);
+        return res.json({
+          _id: applicant._id,
+          name: applicant.name,
+          collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+          email: applicant.email,
+          username: applicant.appNo,
+          role: 'Student', // Pretend to be a student for the portal
+          department: applicant.branch,
+          token: generateToken(applicant._id, 'Student'),
+        });
+      }
+    }
+
     // If none matches
     res.status(401).json({ message: 'Invalid username or password' });
   } catch (error) {

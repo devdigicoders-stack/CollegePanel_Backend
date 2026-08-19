@@ -5,9 +5,32 @@ const AssignmentSubmission = require('../models/AssignmentSubmission');
 // Get profile
 exports.getProfile = async (req, res) => {
   try {
-    const student = await Student.findOne({ _id: req.student._id, collegeId: req.college._id })
+    let student = await Student.findOne({ _id: req.student._id, collegeId: req.college._id })
       .select('-password');
-    if (!student) return res.status(404).json({ message: 'Student not found' });
+      
+    if (!student) {
+      // Check if they are an applicant
+      const Admission = require('../models/Admission');
+      const applicant = await Admission.findOne({ _id: req.student._id, collegeId: req.college._id });
+      if (applicant) {
+        return res.status(200).json({
+          _id: applicant._id,
+          studentName: applicant.name,
+          studentId: applicant.appNo,
+          email: applicant.email,
+          phone: applicant.mobile,
+          gender: applicant.gender,
+          dob: applicant.dob,
+          course: applicant.course,
+          branch: applicant.branch,
+          year: applicant.year,
+          session: applicant.session,
+          status: 'Applicant (Pending Approval)'
+        });
+      }
+      return res.status(404).json({ message: 'Student/Applicant not found' });
+    }
+    
     res.status(200).json(student);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching profile', error: error.message });
@@ -41,6 +64,17 @@ exports.getDashboardStats = async (req, res) => {
     const studentId = req.student._id;
     const collegeId = req.college._id;
     
+    const Admission = require('../models/Admission');
+    const isApplicant = await Admission.exists({ _id: studentId, collegeId });
+    if (isApplicant) {
+      return res.json({
+        attendance: 0,
+        assignments: 0,
+        studyMaterials: 0,
+        hostelStatus: 'Not Allocated (Pending Admission)'
+      });
+    }
+
     // Attendance %
     const attendanceRecords = await AttendanceRecord.find({ studentId, collegeId });
     let present = 0, total = 0;
