@@ -66,8 +66,24 @@ exports.getDashboardStats = async (req, res) => {
     
     const Admission = require('../models/Admission');
     const isApplicant = await Admission.exists({ _id: studentId, collegeId });
+    
+    // Always calculate totalAssignments based on available info
+    const queryOr = [];
+    if (req.student.course) queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
+    if (req.student.branch) queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
+    
+    const totalAssignments = queryOr.length > 0 ? await Assignment.countDocuments({
+      collegeId,
+      $or: queryOr
+    }) : 0;
+
     if (isApplicant) {
       return res.json({
+        attendancePercentage: 0,
+        totalClasses: 0,
+        presentClasses: 0,
+        pendingAssignments: 0,
+        totalAssignments,
         attendance: 0,
         assignments: 0,
         studyMaterials: 0,
@@ -87,25 +103,14 @@ exports.getDashboardStats = async (req, res) => {
     // Pending Assignments
     const submissions = await AssignmentSubmission.find({ studentId, collegeId }).select('assignmentId');
     const submittedIds = submissions.map(s => s.assignmentId.toString());
-    const pendingAssignments = await Assignment.countDocuments({
+    const pendingAssignments = queryOr.length > 0 ? await Assignment.countDocuments({
       collegeId,
-      $or: [
-        { course: { $regex: new RegExp(req.student.course, 'i') } },
-        { course: { $regex: new RegExp(req.student.branch, 'i') } }
-      ],
+      $or: queryOr,
       _id: { $nin: submittedIds }
-    });
+    }) : 0;
 
 
 
-
-    const totalAssignments = await Assignment.countDocuments({
-      collegeId,
-      $or: [
-        { course: { $regex: new RegExp(req.student.course, 'i') } },
-        { course: { $regex: new RegExp(req.student.branch, 'i') } }
-      ]
-    });
 
     res.status(200).json({
       attendancePercentage,
@@ -123,12 +128,17 @@ exports.getDashboardStats = async (req, res) => {
 // Get assignments
 exports.getAssignments = async (req, res) => {
   try {
+    const queryOr = [];
+    if (req.student.course) queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
+    if (req.student.branch) queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
+
+    if (queryOr.length === 0) {
+      return res.status(200).json([]);
+    }
+
     // Only get assignments for student's course/branch
     const assignments = await Assignment.find({ 
-      $or: [
-        { course: { $regex: new RegExp(req.student.course, 'i') } },
-        { course: { $regex: new RegExp(req.student.branch, 'i') } }
-      ],
+      $or: queryOr,
       collegeId: req.college._id 
     })
       .populate('teacherId', 'name')
