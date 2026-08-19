@@ -93,18 +93,26 @@ exports.getDashboardStats = async (req, res) => {
         { course: { $regex: new RegExp(req.student.course, 'i') } },
         { course: { $regex: new RegExp(req.student.branch, 'i') } }
       ],
-      _id: { $nin: submittedIds },
-      dueDate: { $gte: new Date() }
+      _id: { $nin: submittedIds }
     });
 
 
 
 
+    const totalAssignments = await Assignment.countDocuments({
+      collegeId,
+      $or: [
+        { course: { $regex: new RegExp(req.student.course, 'i') } },
+        { course: { $regex: new RegExp(req.student.branch, 'i') } }
+      ]
+    });
+
     res.status(200).json({
       attendancePercentage,
       totalClasses: total,
       presentClasses: present,
-      pendingAssignments
+      pendingAssignments,
+      totalAssignments
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching dashboard stats', error: error.message });
