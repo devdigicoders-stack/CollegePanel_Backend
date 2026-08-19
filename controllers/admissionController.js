@@ -147,6 +147,10 @@ exports.createPublicAdmission = async (req, res) => {
       return res.status(400).json({ message: 'College ID is required' });
     }
 
+    if (!course || !otherFields.branch || !otherFields.year || !otherFields.session) {
+      return res.status(400).json({ message: 'Course, Branch, Year, and Session are strictly required.' });
+    }
+
     // Generate Application Number dynamically
     const year = new Date().getFullYear();
     const count = await Admission.countDocuments({ collegeId });
@@ -341,7 +345,9 @@ exports.registerStudent = async (req, res) => {
         dob: admission.dob ? new Date(admission.dob) : new Date(),
         address: admission.currentAddress || 'N/A',
         course: admission.course,
-        session: admission.academicSession || '',
+        session: admission.session || admission.academicSession || '',
+        branch: admission.branch || admission.course || '',
+        year: admission.year || '1st Year',
         enrollmentDate: new Date(),
         collegeId: admission.collegeId,
         username: `${admission.name.toLowerCase().replace(/\s+/g, '.')}.${Date.now().toString().slice(-4)}`,

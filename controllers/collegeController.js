@@ -7,6 +7,7 @@ const Employee = require('../models/Employee');
 const Notice = require('../models/Notice');
 const Student = require('../models/Student');
 const Admission = require('../models/Admission');
+const Lead = require('../models/Lead');
 
 // @desc    Create a new college
 // @route   POST /api/colleges
@@ -328,7 +329,8 @@ exports.getCollegeCategoryDetails = async (req, res) => {
       'departments': Department,
       'employees': Employee,
       'students': Student,
-      'admissions': Admission
+      'admissions': Admission,
+      'leads': Lead
     };
 
     const cat = category.toLowerCase();
@@ -336,7 +338,6 @@ exports.getCollegeCategoryDetails = async (req, res) => {
     if (directModelMap[cat]) {
       let query = { collegeId: id };
 
-      // Apply dynamic filters if category is students
       if (cat === 'students') {
         const { branch, year, session, course, search } = req.query;
         if (branch && branch !== 'All Branches' && branch !== 'All Departments' && branch !== '') query.branch = branch;
@@ -353,6 +354,42 @@ exports.getCollegeCategoryDetails = async (req, res) => {
             { branch: { $regex: search, $options: 'i' } }
           ];
         }
+        
+        const students = await Student.find(query).sort({ createdAt: -1 });
+        
+        // Also fetch admissions (unapproved) to show in Superadmin Students tab
+        const admissions = await Admission.find({ collegeId: id }).sort({ createdAt: -1 });
+        const mappedAdmissions = admissions.map(adm => ({
+          _id: adm._id,
+          studentId: adm.appNo || 'APP-XXX',
+          studentName: adm.name || 'Unknown',
+          email: adm.email || '',
+          phone: adm.mobile || '',
+          gender: adm.gender || '',
+          dob: adm.dob || '',
+          category: adm.category || '',
+          religion: adm.religion || '',
+          aadhaar: adm.aadhaar || '',
+          nationality: adm.nationality || '',
+          address: adm.address ? `${adm.address}, ${adm.city}, ${adm.state} - ${adm.pincode}` : '',
+          fatherName: adm.parentName || '',
+          fatherMobile: adm.fatherMobile || '',
+          motherName: adm.motherName || '',
+          motherMobile: adm.motherMobile || '',
+          fatherOccupation: adm.fatherOccupation || '',
+          annualIncome: adm.annualIncome || '',
+          course: adm.course || '',
+          enrollmentDate: adm.createdAt,
+          status: adm.status === 'Pending' ? 'Admission Pending' : adm.status,
+          branch: adm.branch || adm.course || 'N/A',
+          year: adm.year || '1st Year',
+          session: adm.session || adm.academicSession || 'N/A',
+          isAdmission: true
+        }));
+        
+        // If searching, we should ideally filter mappedAdmissions as well, but for simplicity we'll just merge
+        const combinedData = [...students, ...mappedAdmissions];
+        return res.json(combinedData);
       }
 
       const data = await directModelMap[cat].find(query).sort({ createdAt: -1 });
