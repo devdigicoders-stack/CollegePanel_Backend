@@ -9,12 +9,14 @@ const {
   getDashboardStats,
   updateDocumentStatus,
   registerStudent,
-  createPublicAdmission
+  createPublicAdmission,
+  getPublicFormOptions
 } = require('../controllers/admissionController');
 const { collegeProtect } = require('../middlewares/authMiddleware');
 
 // Public route for students to submit applications
 router.post('/public/:collegeId', createPublicAdmission);
+router.get('/public/:collegeId/form-options', getPublicFormOptions);
 
 router.get('/dashboard-stats', collegeProtect, getDashboardStats);
 
