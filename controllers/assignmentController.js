@@ -2,6 +2,8 @@ const Assignment = require('../models/Assignment');
 const AssignmentSubmission = require('../models/AssignmentSubmission');
 const Employee = require('../models/Employee');
 const Teacher = require('../models/Teacher');
+const Student = require('../models/Student');
+const Admission = require('../models/Admission');
 
 const collegeFilter = (req) => ({ collegeId: req.college._id });
 
@@ -115,12 +117,33 @@ exports.getAssignmentSubmissions = async (req, res) => {
     // For simplicity, we just return all populated with student details.
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const submissions = await AssignmentSubmission.find(filter)
-      .populate('studentId', 'studentName studentId email')
+    let submissions = await AssignmentSubmission.find(filter)
       .sort({ submissionDate: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .select('-__v');
+      .lean();
+      
+    // Manually populate to support both Student and Admission collections
+    for (let sub of submissions) {
+      if (sub.studentId) {
+        let student = await Student.findById(sub.studentId, 'studentName studentId email').lean();
+        if (student) {
+          sub.studentId = student;
+        } else {
+          let applicant = await Admission.findById(sub.studentId, 'name appNo email').lean();
+          if (applicant) {
+            sub.studentId = {
+              _id: applicant._id,
+              studentName: applicant.name,
+              studentId: applicant.appNo,
+              email: applicant.email
+            };
+          } else {
+            sub.studentId = null;
+          }
+        }
+      }
+    }
       
     // Handle search filter in memory if provided
     let filteredSubmissions = submissions;
