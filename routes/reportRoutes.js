@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const {
   getAdmissionsReport,
-  getFinancialReport,
   getAcademicReport,
   getHRReport,
   getLibraryReport,
@@ -21,7 +20,6 @@ router.use(collegeProtect);
 
 // Module-specific report endpoints
 router.get('/admissions', getAdmissionsReport);
-router.get('/financial', getFinancialReport);
 router.get('/academic', getAcademicReport);
 router.get('/hr', getHRReport);
 router.get('/library', getLibraryReport);

@@ -14,15 +14,6 @@ exports.addLog = async (req, res) => {
     if (logType === 'Student' && req.body.enrollNo) {
       let st = await Student.findOne({ studentId: req.body.enrollNo, collegeId: req.college._id });
       
-      // Fallback: If they provided an enrollment number instead of student ID, look it up in StudentFee
-      if (!st) {
-        const StudentFee = require('../models/StudentFee');
-        const fee = await StudentFee.findOne({ enrollNo: req.body.enrollNo, collegeId: req.college._id });
-        if (fee) {
-          st = await Student.findById(fee.studentId);
-        }
-      }
-
       if (!st) return res.status(404).json({ message: 'Student not found with this enrollment number' });
       targetStudentId = st._id;
     }

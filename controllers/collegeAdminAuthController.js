@@ -30,6 +30,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         adminEmail: college.adminEmail,
         username: college.username,
         role: 'college_admin',
+        collegeId: college._id,
         department: 'Administration',
         token: generateToken(college._id, 'college_admin'),
       });
@@ -61,6 +62,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         username: employee.username,
         role: employee.role, // e.g. 'Principal', 'Hostel Warden', etc.
         department: employee.department,
+        collegeId: employee.collegeId,
         permissions: permissions, // Attach permissions
         token: generateToken(employee._id, employee.role),
       });
@@ -91,6 +93,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         username: teacher.username,
         role: 'Teacher Role',
         department: teacher.department,
+        collegeId: teacher.collegeId,
         permissions: permissions,
         token: generateToken(teacher._id, 'Teacher Role'),
       });

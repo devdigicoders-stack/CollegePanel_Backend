@@ -2,7 +2,6 @@ const HostelRoom = require('../models/HostelRoom');
 const HostelAllocation = require('../models/HostelAllocation');
 const Student = require('../models/Student');
 const HostelCheckInOut = require('../models/HostelCheckInOut');
-const HostelAttendance = require('../models/HostelAttendance');
 const HostelLeaveOuting = require('../models/HostelLeaveOuting');
 const HostelVisitor = require('../models/HostelVisitor');
 const HostelIncident = require('../models/HostelIncident');

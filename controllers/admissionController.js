@@ -1,7 +1,6 @@
 const Admission = require('../models/Admission');
 const Student = require('../models/Student');
-const StudentFee = require('../models/StudentFee');
-const FeeStructure = require('../models/FeeStructure');
+
 
 // @desc    Get all admissions for a specific college with pagination and filters
 // @route   GET /api/admissions
@@ -133,6 +132,65 @@ exports.createAdmission = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error creating admission', error: error.message });
+  }
+};
+
+// @desc    Create new public admission (submitted by student)
+// @route   POST /api/admissions/public/:collegeId
+// @access  Public
+exports.createPublicAdmission = async (req, res) => {
+  try {
+    const { collegeId } = req.params;
+    const { name, course, mobile, email, parentName, dob, gender, currentAddress, city, state, documents, ...otherFields } = req.body;
+
+    if (!collegeId) {
+      return res.status(400).json({ message: 'College ID is required' });
+    }
+
+    // Generate Application Number dynamically
+    const year = new Date().getFullYear();
+    const count = await Admission.countDocuments({ collegeId });
+    const padded = (count + 1).toString().padStart(4, '0');
+    const appNo = `APP/${year}/${padded}`;
+
+    // Initialize default documents based on stage
+    const finalDocuments = documents && documents.length > 0 ? documents : [
+      { name: 'Photograph', status: 'Not Uploaded' },
+      { name: 'Aadhaar Card', status: 'Not Uploaded' },
+      { name: '10th Marksheet', status: 'Not Uploaded' },
+      { name: 'Transfer Certificate', status: 'Not Uploaded' },
+      { name: 'Character Certificate', status: 'Not Uploaded' }
+    ];
+
+    // Create admission
+    const admission = new Admission({
+      appNo,
+      name,
+      course,
+      mobile,
+      email,
+      parentName,
+      dob,
+      gender,
+      currentAddress,
+      city,
+      state,
+      stage: 'Application',
+      status: 'Pending',
+      documents: finalDocuments,
+      collegeId,
+      ...otherFields
+    });
+
+    await admission.save();
+
+    res.status(201).json({
+      message: 'Registration details submitted successfully',
+      admission,
+      appNo
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error submitting registration details', error: error.message });
   }
 };
 
@@ -333,23 +391,6 @@ exports.registerStudent = async (req, res) => {
       });
     }
 
-    // Auto-create StudentFee Ledger if not exists
-    let feeLedger = await StudentFee.findOne({ enrollNo: admission.enrollNo });
-    if (!feeLedger) {
-      const feeStruct = await FeeStructure.findOne({ courseName: admission.course, collegeId: admission.collegeId });
-      const totalFee = feeStruct ? feeStruct.total : 0;
-      
-      await StudentFee.create({
-        studentId: studentRecord._id,
-        enrollNo: admission.enrollNo,
-        studentName: admission.name,
-        course: admission.course,
-        semester: admission.semester || '1',
-        totalFee: totalFee,
-        pending: totalFee,
-        collegeId: admission.collegeId
-      });
-    }
 
     res.json({
       message: 'Student registered successfully',
@@ -366,20 +407,8 @@ exports.registerStudent = async (req, res) => {
 exports.getDashboardStats = async (req, res) => {
   try {
     const collegeId = req.college._id;
-    const Enquiry = require('../models/Enquiry');
-    const FollowUp = require('../models/FollowUp');
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // Enquiries
-    const totalEnquiries = await Enquiry.countDocuments({ collegeId });
-    const todayEnquiries = await Enquiry.countDocuments({ collegeId, createdAt: { $gte: today } });
-    const recentEnquiriesList = await Enquiry.find({ collegeId }).sort({ createdAt: -1 }).limit(5);
-
-    // Follow-ups
-    const pendingFollowUps = await FollowUp.countDocuments({ collegeId, callStatus: { $ne: 'Converted' } }); // Approx pending
-    const todayFollowUpsList = await FollowUp.find({ collegeId, followUpDate: { $gte: today } }).populate('enquiryId').sort({ followUpDate: 1 }).limit(5);
 
     // Admissions
     const totalApplications = await Admission.countDocuments({ collegeId, stage: { $ne: 'Enquiry' } });
@@ -387,7 +416,7 @@ exports.getDashboardStats = async (req, res) => {
     const approvedAdmissions = await Admission.countDocuments({ collegeId, stage: 'Admitted' });
     const rejectedAdmissions = await Admission.countDocuments({ collegeId, stage: 'Cancelled' });
     const docVerPending = await Admission.countDocuments({ collegeId, stage: 'Document Verification' });
-    const docVerPendingList = await Admission.find({ collegeId, stage: 'Document Verification' }).sort({ createdAt: -1 }).limit(5);
+    const latestPendingApps = await Admission.find({ collegeId, status: 'Pending' }).sort({ createdAt: -1 }).limit(5);
     const feePending = await Admission.countDocuments({ collegeId, status: 'In Progress' }); // Approximation
     
     // Course-wise Admissions for pie chart
@@ -398,9 +427,6 @@ exports.getDashboardStats = async (req, res) => {
 
     res.json({
       stats: {
-        totalEnquiries,
-        todayEnquiries,
-        pendingFollowUps,
         totalApplications,
         pendingApplications,
         approvedAdmissions,
@@ -408,9 +434,7 @@ exports.getDashboardStats = async (req, res) => {
         docVerPending,
         feePending
       },
-      recentEnquiriesList,
-      todayFollowUpsList,
-      docVerPendingList,
+      latestPendingApps,
       admissionsByCourse
     });
 

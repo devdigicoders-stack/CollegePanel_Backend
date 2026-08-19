@@ -188,7 +188,6 @@ exports.getAvailablePermissions = async (req, res) => {
       { category: 'Academics', permissions: ['View Courses', 'Manage Courses', 'View Departments', 'Manage Departments', 'View Subjects', 'Manage Subjects', 'View Sections', 'Manage Sections'] },
       { category: 'Fees', permissions: ['View Fees', 'Collect Fees', 'Generate Receipt', 'View Fee Reports', 'Manage Fee Structure'] },
       { category: 'Attendance', permissions: ['View Attendance', 'Mark Attendance', 'Edit Attendance', 'View Attendance Reports'] },
-      { category: 'Examinations', permissions: ['View Exams', 'Create Exam', 'Edit Exam', 'Delete Exam', 'Enter Marks', 'View Results'] },
       { category: 'Library', permissions: ['View Books', 'Add Book', 'Edit Book', 'Delete Book', 'Issue Book', 'Return Book'] },
       { category: 'Hostel', permissions: ['View Hostels', 'Manage Rooms', 'Manage Allocations', 'View Hostel Reports'] },
       { category: 'Security & Gate', permissions: ['View Security Dashboard', 'Log Student Entry/Exit', 'Scan Gate Pass', 'Log Vehicle Registry', 'Log Security Incident'] },

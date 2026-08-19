@@ -2,11 +2,7 @@ const Student = require('../models/Student');
 const Employee = require('../models/Employee');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
-const Fee = require('../models/Fee');
-const FeePayment = require('../models/FeePayment');
-const PendingDue = require('../models/PendingDue');
-const Attendance = require('../models/Attendance');
-const Examination = require('../models/Examination');
+
 const Complaint = require('../models/Complaint');
 const LibraryBook = require('../models/LibraryBook');
 const LibraryTransaction = require('../models/LibraryTransaction');
@@ -15,9 +11,7 @@ const HostelAllocation = require('../models/HostelAllocation');
 const SecurityLog = require('../models/SecurityLog');
 const SecurityIncident = require('../models/SecurityIncident');
 const Notice = require('../models/Notice');
-const Enquiry = require('../models/Enquiry');
 const Assignment = require('../models/Assignment');
-const LeaveRequest = require('../models/LeaveRequest');
 const Admission = require('../models/Admission');
 
 exports.getOverview = async (req, res) => {
@@ -35,75 +29,29 @@ exports.getOverview = async (req, res) => {
       totalEmployees,
       totalClasses,
       totalSubjects,
-      upcomingExams,
       pendingComplaints,
       totalLibraryBooks,
       totalHostelRooms,
       activeHostelAllocations,
-      totalAdmissions,
-      pendingLeaves,
-      totalEnquiries
+      totalAdmissions
     ] = await Promise.all([
       Student.countDocuments({ collegeId }),
       Employee.countDocuments({ collegeId }),
       Section.countDocuments({ collegeId }),
       Subject.countDocuments({ collegeId }),
-      Examination.countDocuments({ collegeId, status: 'Upcoming', date: { $gte: today } }),
       Complaint.countDocuments({ collegeId, status: { $in: ['Pending', 'In Progress'] } }),
       LibraryBook.countDocuments({ collegeId }),
       HostelRoom.countDocuments({ collegeId }),
       HostelAllocation.countDocuments({ collegeId, status: 'Active' }),
-      Admission.countDocuments({ collegeId }),
-      LeaveRequest.countDocuments({ collegeId, status: 'Pending' }),
-      Enquiry.countDocuments({ collegeId })
+      Admission.countDocuments({ collegeId })
     ]);
 
     // Faculty vs Staff breakdown
     const facultyCount = await Employee.countDocuments({ collegeId, role: { $in: ['Teacher', 'HOD', 'Faculty'] } });
 
-    // ── Fee Data (FeePayment model = accurate) ───────────────────────────────
-    let collectedFee = 0, pendingFee = 0, overdueFee = 0;
-    let monthlyFee = Array(12).fill(0);
 
-    const [feePayments, pendingDues] = await Promise.all([
-      FeePayment.find({ collegeId, status: 'Completed' }),
-      PendingDue.find({ collegeId })
-    ]);
 
-    feePayments.forEach(fp => {
-      collectedFee += fp.amount || 0;
-      const m = new Date(fp.date).getMonth();
-      monthlyFee[m] += fp.amount || 0;
-    });
-
-    pendingDues.forEach(d => {
-      if (d.status === 'Upcoming') pendingFee += d.dueAmount || 0;
-      else if (d.status === 'Overdue') overdueFee += d.dueAmount || 0;
-    });
-
-    // Fallback to Fee model if FeePayment is empty
-    if (collectedFee === 0) {
-      const feeData = await Fee.find({ collegeId });
-      feeData.forEach(f => {
-        if (f.status === 'Paid') collectedFee += f.amount || 0;
-        else if (f.status === 'Pending') pendingFee += f.amount || 0;
-        else if (f.status === 'Overdue') overdueFee += f.amount || 0;
-      });
-    }
-
-    // ── Today's Attendance ────────────────────────────────────────────────────
-    const todayAttendances = await Attendance.find({
-      collegeId,
-      date: { $gte: today, $lte: endOfDay }
-    });
-    let presentStudents = 0, totalAttendanceTracked = 0;
-    todayAttendances.forEach(att => {
-      presentStudents += att.present || 0;
-      totalAttendanceTracked += att.total || 0;
-    });
-    const absentStudents = totalAttendanceTracked - presentStudents;
-    const attendancePercent = totalAttendanceTracked > 0
-      ? parseFloat(((presentStudents / totalAttendanceTracked) * 100).toFixed(1)) : 0;
+    const attendancePercent = 0;
 
     // ── Monthly Student Registrations (last 12 months) ────────────────────────
     const students = await Student.find({ collegeId }, 'createdAt enrollmentDate');
@@ -200,24 +148,10 @@ exports.getOverview = async (req, res) => {
       .limit(5)
       .select('title targetAudience postedBy dateOfPublishing');
 
-    // ── Upcoming Exams List ───────────────────────────────────────────────────
-    const upcomingExamList = await Examination.find({
-      collegeId,
-      status: 'Upcoming',
-      date: { $gte: today }
-    }).sort({ date: 1 }).limit(5).select('examName course subject date');
 
-    // ── Enquiry Source Breakdown ──────────────────────────────────────────────
-    const allEnquiries = await Enquiry.find({ collegeId }, 'enquirySource status createdAt');
-    const enquiryBySource = {};
-    const enquiryByStatus = {};
-    allEnquiries.forEach(e => {
-      if (e.enquirySource) enquiryBySource[e.enquirySource] = (enquiryBySource[e.enquirySource] || 0) + 1;
-      if (e.status) enquiryByStatus[e.status] = (enquiryByStatus[e.status] || 0) + 1;
-    });
 
-    // ── Monthly Fee trend for chart ───────────────────────────────────────────
-    const feeByMonth = monthlyFee;
+
+
 
     res.status(200).json({
       // Core Stats
@@ -226,22 +160,15 @@ exports.getOverview = async (req, res) => {
       facultyCount,
       totalClasses,
       totalSubjects,
-      upcomingExams,
       pendingComplaints,
-      pendingLeaves,
       totalAdmissions,
-      totalEnquiries,
 
-      // Fee
-      fees: { collected: collectedFee, pending: pendingFee, overdue: overdueFee },
-      feeByMonth,
-
-      // Attendance
+      // Attendance removed
       attendance: {
-        present: presentStudents,
-        absent: absentStudents,
-        percent: attendancePercent,
-        facultyPercent: 92 // realistic mock until faculty attendance tracking implemented
+        present: 0,
+        absent: 0,
+        percent: 0,
+        facultyPercent: 0
       },
 
       // Monthly Trends
@@ -285,14 +212,7 @@ exports.getOverview = async (req, res) => {
       },
 
       // Lists
-      recentNotices,
-      upcomingExamList,
-
-      // Enquiry
-      enquiry: {
-        bySource: enquiryBySource,
-        byStatus: enquiryByStatus
-      }
+      recentNotices
     });
   } catch (error) {
     console.error('Dashboard Error:', error);

@@ -22,9 +22,6 @@ router.get('/dashboard/stats', hostelController.getDashboardStats);
 router.get('/check-in-out', hostelController.getCheckInOutLogs);
 router.post('/check-in-out', hostelController.addCheckInOutLog);
 
-// Attendance
-router.get('/attendance', hostelController.getAttendance);
-router.post('/attendance', hostelController.markAttendance);
 
 // Leaves & Outings
 router.get('/leaves', hostelController.getLeaves);

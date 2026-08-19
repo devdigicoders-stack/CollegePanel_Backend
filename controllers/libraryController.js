@@ -1,6 +1,5 @@
 const LibraryBook = require('../models/LibraryBook');
 const LibraryTransaction = require('../models/LibraryTransaction');
-const LibraryReservation = require('../models/LibraryReservation');
 const LibraryLostDamaged = require('../models/LibraryLostDamaged');
 const Student = require('../models/Student');
 
@@ -8,11 +7,6 @@ const generateTransactionId = async () => {
   const count = await LibraryTransaction.countDocuments();
   const date = new Date().toISOString().slice(2, 10).replace(/-/g, '');
   return `TXN-${date}-${String(count + 1).padStart(4, '0')}`;
-};
-
-const generateReserveId = async () => {
-  const count = await LibraryReservation.countDocuments();
-  return `RES-${String(count + 1).padStart(4, '0')}`;
 };
 
 const generateCaseNo = async () => {
@@ -46,7 +40,6 @@ const getStats = async (req, res) => {
     const overdueTxnsRaw = transactions.filter(t => t.status === 'Overdue');
     const overdueBooks = overdueTxnsRaw.length;
 
-    const reservedBooks = await LibraryReservation.countDocuments({ collegeId: req.college._id, status: { $in: ['Pending', 'Confirmed'] } });
     const lostBooks = books.filter(b => b.status === 'Lost').length;
     const damagedBooks = books.filter(b => b.status === 'Damaged').length;
 
@@ -88,7 +81,6 @@ const getStats = async (req, res) => {
       overdueBooks,
       todayIssues: todayIssuesCount,
       todayReturns: todayReturnsCount,
-      reservedBooks: reservedBooks,
       lostBooks,
       damagedBooks,
       pendingFines,
@@ -234,114 +226,7 @@ exports.getCategories = async (req, res) => {
   }
 };
 
-// --- Members Management ---
-exports.getMembers = async (req, res) => {
-  try {
-    const { search, type, status, page = 1, limit = 10 } = req.query;
-    let query = { collegeId: req.college._id };
 
-    if (status && status !== 'All') query.status = status;
-    const skip = (page - 1) * limit;
-    let members = [];
-    let total = 0;
-
-    const processTransactions = async (users, roleType) => {
-      for (const u of users) {
-        const trans = await LibraryTransaction.find({ studentId: u._id, status: { $in: ['Issued', 'Renewed', 'Overdue'] } });
-        let fine = 0;
-        const allTrans = await LibraryTransaction.find({ studentId: u._id });
-        allTrans.forEach(t => fine += ((t.fineAmount || 0) - (t.paidAmount || 0)));
-        
-        // Handle different name fields per model
-        let userName, userDept, userCourse, memberId;
-        if (roleType === 'Student') {
-          userName = u.studentName || u.name || 'Unknown';
-          userDept = u.branch || u.department || 'N/A';
-          userCourse = u.course || 'N/A';
-          memberId = u.studentId || u.enrollmentNo || u._id.toString().slice(-6);
-        } else {
-          userName = u.name || u.firstName || 'Unknown';
-          userDept = u.department || 'N/A';
-          userCourse = u.designation || u.role || 'Staff';
-          memberId = u.empId || u.employeeId || u._id.toString().slice(-6);
-        }
-
-        if (search && !(
-          userName.toLowerCase().includes(search.toLowerCase()) ||
-          memberId.toLowerCase().includes(search.toLowerCase()) ||
-          (u.email || '').toLowerCase().includes(search.toLowerCase())
-        )) continue;
-
-        members.push({
-          _id: u._id,
-          memberId: memberId,
-          name: userName,
-          type: roleType,
-          department: userDept,
-          course: userCourse,
-          issuedCount: trans.length,
-          fine: Math.max(0, fine),
-          status: u.status || 'Active'
-        });
-      }
-    };
-
-    if (!type || type === 'All' || type === 'Student') {
-      const students = await Student.find(query);
-      await processTransactions(students, 'Student');
-    }
-    
-    // Check Teacher model
-    const Teacher = require('../models/Teacher');
-    if (!type || type === 'All' || type === 'Teacher' || type === 'HOD') {
-      let tQuery = { ...query };
-      if (type === 'HOD') tQuery.designation = 'HOD';
-      const teachers = await Teacher.find(tQuery);
-      await processTransactions(teachers, 'Teacher');
-    }
-
-    // Check Employee model
-    const Employee = require('../models/Employee');
-    if (!type || type === 'All' || type === 'Employee') {
-      const employees = await Employee.find(query);
-      await processTransactions(employees, 'Employee');
-    }
-    
-    total = members.length;
-    const paginatedMembers = members.slice(skip, skip + Number(limit));
-
-    res.status(200).json({
-      members: paginatedMembers,
-      pagination: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / limit) || 1 }
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching members', error: error.message });
-  }
-};
-
-exports.toggleMemberStatus = async (req, res) => {
-  try {
-    let member = await Student.findOne({ _id: req.params.id, collegeId: req.college._id });
-    
-    if (!member) {
-      const Teacher = require('../models/Teacher');
-      member = await Teacher.findOne({ _id: req.params.id, collegeId: req.college._id });
-    }
-    
-    if (!member) {
-      const Employee = require('../models/Employee');
-      member = await Employee.findOne({ _id: req.params.id, collegeId: req.college._id });
-    }
-
-    if (!member) return res.status(404).json({ message: 'Member not found' });
-    
-    member.status = member.status === 'Active' ? 'Inactive' : 'Active';
-    await member.save();
-    res.status(200).json({ message: `Member status updated to ${member.status}` });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating member status', error: error.message });
-  }
-};
 
 // --- Transactions ---
 exports.getTransactions = async (req, res) => {
@@ -482,80 +367,6 @@ exports.renewTransaction = async (req, res) => {
   }
 };
 
-// --- Reservations ---
-exports.getReservations = async (req, res) => {
-  try {
-    const reservations = await LibraryReservation.find({ collegeId: req.college._id })
-      .populate('bookId', 'title accessionNo')
-      .sort({ requestDate: -1 })
-      .lean();
-
-    const Teacher = require('../models/Teacher');
-    const Employee = require('../models/Employee');
-
-    for (let i = 0; i < reservations.length; i++) {
-      let r = reservations[i];
-      if (r.memberId) {
-        let member = await Student.findById(r.memberId).select('firstName lastName enrollmentNo').lean();
-        if (!member) {
-          member = await Teacher.findById(r.memberId).select('firstName lastName').lean();
-        }
-        if (!member) {
-          member = await Employee.findById(r.memberId).select('firstName lastName').lean();
-        }
-        if (member) {
-          r.memberId = member;
-        } else {
-          r.memberId = { firstName: 'Unknown', lastName: 'Member' };
-        }
-      }
-    }
-    
-    res.status(200).json(reservations);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching reservations', error: error.message });
-  }
-};
-
-exports.addReservation = async (req, res) => {
-  try {
-    const reserveId = await generateReserveId();
-    const reservation = new LibraryReservation({
-      ...req.body,
-      reserveId,
-      collegeId: req.college._id
-    });
-    await reservation.save();
-    res.status(201).json({ message: 'Reservation created successfully', reservation });
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating reservation', error: error.message });
-  }
-};
-
-exports.updateReservationStatus = async (req, res) => {
-  try {
-    const reservation = await LibraryReservation.findOneAndUpdate(
-      { _id: req.params.id, collegeId: req.college._id },
-      { status: req.body.status },
-      { returnDocument: 'after' }
-    );
-    if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
-    res.status(200).json({ message: 'Reservation updated', reservation });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating reservation', error: error.message });
-  }
-};
-
-exports.deleteReservation = async (req, res) => {
-  try {
-    const reservation = await LibraryReservation.findOneAndDelete({ _id: req.params.id, collegeId: req.college._id });
-    if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
-    res.status(200).json({ message: 'Reservation deleted' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error deleting reservation', error: error.message });
-  }
-};
-
 // --- Fines ---
 exports.getFines = async (req, res) => {
   try {
@@ -680,31 +491,8 @@ exports.deleteLostDamaged = async (req, res) => {
   }
 };
 
-// --- Stock & Reports ---
-exports.verifyStock = async (req, res) => {
-  try {
-    const { accessionNo } = req.body;
-    const book = await LibraryBook.findOne({ accessionNo, collegeId: req.college._id });
-    if (!book) return res.status(404).json({ message: 'Book not found' });
-    
-    book.lastVerified = new Date();
-    await book.save();
-    
-    res.status(200).json({ message: 'Book verified successfully', book });
-  } catch (error) {
-    res.status(500).json({ message: 'Error verifying stock', error: error.message });
-  }
-};
 
-exports.getStockItems = async (req, res) => {
-  try {
-    const books = await LibraryBook.find({ collegeId: req.college._id });
-    res.status(200).json(books);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching stock', error: error.message });
-  }
-};
-
+// --- Reports ---
 exports.getReportData = async (req, res) => {
   try {
     const transactions = await LibraryTransaction.find({ collegeId: req.college._id });

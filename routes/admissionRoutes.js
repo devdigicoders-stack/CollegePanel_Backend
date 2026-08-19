@@ -8,9 +8,13 @@ const {
   deleteAdmission,
   getDashboardStats,
   updateDocumentStatus,
-  registerStudent
+  registerStudent,
+  createPublicAdmission
 } = require('../controllers/admissionController');
 const { collegeProtect } = require('../middlewares/authMiddleware');
+
+// Public route for students to submit applications
+router.post('/public/:collegeId', createPublicAdmission);
 
 router.get('/dashboard-stats', collegeProtect, getDashboardStats);
 

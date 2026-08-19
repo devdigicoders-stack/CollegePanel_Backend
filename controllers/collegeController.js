@@ -1,13 +1,9 @@
 const College = require('../models/College');
 const Teacher = require('../models/Teacher');
 const Department = require('../models/Department');
-const AttendanceRecord = require('../models/AttendanceRecord');
-const FeePayment = require('../models/FeePayment');
-const Examination = require('../models/Examination');
 const HostelRoom = require('../models/HostelRoom');
 const LibraryBook = require('../models/LibraryBook');
 const Employee = require('../models/Employee');
-const Enquiry = require('../models/Enquiry');
 const Notice = require('../models/Notice');
 const Student = require('../models/Student');
 const Admission = require('../models/Admission');
@@ -330,11 +326,9 @@ exports.getCollegeCategoryDetails = async (req, res) => {
     const directModelMap = {
       'teachers': Teacher,
       'departments': Department,
-      'examinations': Examination,
       'employees': Employee,
       'students': Student,
-      'admissions': Admission,
-      'fees': FeePayment
+      'admissions': Admission
     };
 
     const cat = category.toLowerCase();
@@ -369,29 +363,6 @@ exports.getCollegeCategoryDetails = async (req, res) => {
     let mappedData = [];
 
     switch (cat) {
-      case 'attendance':
-        // Aggregate AttendanceRecord by date to match the dummy model schema
-        const attendanceRecords = await AttendanceRecord.aggregate([
-          { $match: { collegeId: new require('mongoose').Types.ObjectId(id) } },
-          {
-            $group: {
-              _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-              present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
-              total: { $sum: 1 }
-            }
-          },
-          { $sort: { _id: -1 } }
-        ]);
-        
-        mappedData = attendanceRecords.map(record => ({
-          _id: record._id,
-          date: new Date(record._id),
-          present: record.present,
-          total: record.total,
-          status: 'Completed'
-        }));
-        break;
-
       case 'hostel':
         const rooms = await HostelRoom.find({ collegeId: id }).sort({ createdAt: -1 });
         mappedData = rooms.map(r => ({
@@ -409,16 +380,6 @@ exports.getCollegeCategoryDetails = async (req, res) => {
           bookName: b.title,
           author: b.author,
           availableCopies: b.availableCopies
-        }));
-        break;
-
-      case 'leads':
-        const leads = await Enquiry.find({ collegeId: id }).sort({ createdAt: -1 });
-        mappedData = leads.map(l => ({
-          _id: l._id,
-          studentName: l.studentName,
-          source: l.enquirySource || 'Website',
-          status: l.status
         }));
         break;
 

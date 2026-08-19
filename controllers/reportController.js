@@ -1,9 +1,6 @@
 const Student = require('../models/Student');
 const Admission = require('../models/Admission');
 const Employee = require('../models/Employee');
-const AttendanceRecord = require('../models/AttendanceRecord');
-const FeePayment = require('../models/FeePayment');
-const PendingDue = require('../models/PendingDue');
 const LibraryTransaction = require('../models/LibraryTransaction');
 const LibraryBook = require('../models/LibraryBook');
 const HostelAllocation = require('../models/HostelAllocation');
@@ -13,8 +10,6 @@ const Complaint = require('../models/Complaint');
 const SecurityLog = require('../models/SecurityLog');
 const SecurityIncident = require('../models/SecurityIncident');
 const VehicleLog = require('../models/VehicleLog');
-const Examination = require('../models/Examination');
-const LeaveRequest = require('../models/LeaveRequest');
 const Assignment = require('../models/Assignment');
 
 // Helper to build date filter
@@ -39,6 +34,10 @@ exports.getAdmissionsReport = async (req, res) => {
     const collegeId = req.college._id;
     const dateFilter = buildDateFilter(startDate, endDate, 'createdAt');
     const baseFilter = { collegeId, ...dateFilter };
+    
+    if (status && status !== 'All') {
+      baseFilter.status = status;
+    }
 
     let data = [];
     let columns = [];
@@ -80,64 +79,6 @@ exports.getAdmissionsReport = async (req, res) => {
   }
 };
 
-// ============ FINANCIAL REPORTS ============
-
-exports.getFinancialReport = async (req, res) => {
-  try {
-    const { reportType, startDate, endDate } = req.query;
-    const collegeId = req.college._id;
-    const dateFilter = buildDateFilter(startDate, endDate, 'date');
-    const baseFilter = { collegeId, ...dateFilter };
-
-    let data = [];
-    let columns = [];
-
-    if (reportType === 'Fee Collections') {
-      const payments = await FeePayment.find(baseFilter).sort({ date: -1 });
-      columns = ['Receipt No', 'Student', 'Enroll No', 'Amount (₹)', 'Mode', 'Status', 'Date'];
-      data = payments.map(p => ({
-        'Receipt No': p.receiptNo,
-        'Student': p.studentName,
-        'Enroll No': p.enrollNo,
-        'Amount (₹)': `₹${p.amount.toLocaleString('en-IN')}`,
-        'Mode': p.mode,
-        'Status': p.status,
-        'Date': new Date(p.date).toLocaleDateString('en-IN')
-      }));
-    } else if (reportType === 'Pending Dues') {
-      const dues = await PendingDue.find({ collegeId, ...buildDateFilter(startDate, endDate, 'dueDate') }).sort({ dueDate: 1 });
-      columns = ['Student', 'Enroll No', 'Course', 'Due Amount (₹)', 'Due Date', 'Status'];
-      data = dues.map(d => ({
-        'Student': d.name,
-        'Enroll No': d.enrollNo,
-        'Course': d.course,
-        'Due Amount (₹)': `₹${(d.dueAmount || 0).toLocaleString('en-IN')}`,
-        'Due Date': new Date(d.dueDate).toLocaleDateString('en-IN'),
-        'Status': d.status
-      }));
-    } else if (reportType === 'Collection Summary') {
-      const payments = await FeePayment.find({ collegeId, ...buildDateFilter(startDate, endDate, 'date') });
-      const modeMap = {};
-      let total = 0;
-      payments.forEach(p => {
-        modeMap[p.mode] = (modeMap[p.mode] || 0) + p.amount;
-        total += p.amount;
-      });
-      columns = ['Payment Mode', 'Total Collected (₹)', 'Transactions'];
-      const modeCount = {};
-      payments.forEach(p => { modeCount[p.mode] = (modeCount[p.mode] || 0) + 1; });
-      data = Object.entries(modeMap).map(([mode, amt]) => ({
-        'Payment Mode': mode,
-        'Total Collected (₹)': `₹${amt.toLocaleString('en-IN')}`,
-        'Transactions': modeCount[mode]
-      }));
-    }
-
-    res.json({ columns, data });
-  } catch (error) {
-    res.status(500).json({ message: 'Error generating financial report', error: error.message });
-  }
-};
 
 // ============ ACADEMIC REPORTS ============
 
@@ -172,28 +113,6 @@ exports.getAcademicReport = async (req, res) => {
         'Department': e.department,
         'Status': e.status,
         'Date of Joining': e.dateOfJoining ? new Date(e.dateOfJoining).toLocaleDateString('en-IN') : '-'
-      }));
-    } else if (reportType === 'Exam Schedule') {
-      const exams = await Examination.find({ collegeId, ...buildDateFilter(startDate, endDate, 'date') }).sort({ date: 1 });
-      columns = ['Exam Title', 'Course', 'Subject', 'Date', 'Type', 'Max Marks'];
-      data = exams.map(e => ({
-        'Exam Title': e.title || e.examName || 'N/A',
-        'Course': e.course || e.courseName || '-',
-        'Subject': e.subject || '-',
-        'Date': e.date ? new Date(e.date).toLocaleDateString('en-IN') : '-',
-        'Type': e.type || '-',
-        'Max Marks': e.totalMarks || e.maxMarks || '-'
-      }));
-    } else if (reportType === 'Leave Requests') {
-      const leaves = await LeaveRequest.find({ collegeId, ...buildDateFilter(startDate, endDate, 'fromDate') }).sort({ createdAt: -1 });
-      columns = ['Employee', 'Leave Type', 'From', 'To', 'Days', 'Status'];
-      data = leaves.map(l => ({
-        'Employee': l.applicantName || '-',
-        'Leave Type': l.leaveType || '-',
-        'From': l.fromDate ? new Date(l.fromDate).toLocaleDateString('en-IN') : '-',
-        'To': l.toDate ? new Date(l.toDate).toLocaleDateString('en-IN') : '-',
-        'Days': l.days || '-',
-        'Status': l.status || '-'
       }));
     } else if (reportType === 'Assignments') {
       const assignments = await Assignment.find({ collegeId, ...dateFilter }).sort({ dueDate: 1 });

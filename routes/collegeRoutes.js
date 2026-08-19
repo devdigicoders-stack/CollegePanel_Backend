@@ -3,7 +3,6 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const { createCollege, getAllColleges, toggleCollegeStatus, deleteCollege, getCollegeById, updateCollege, getCollegeCategoryDetails, getCollegeCategoryFilters } = require('../controllers/collegeController');
-const { updateAttendanceSettings, getAttendanceSettings } = require('../controllers/attendanceSettingsController');
 const { protect } = require('../middlewares/authMiddleware');
 
 // Set up Multer for College Logo upload
@@ -37,12 +36,6 @@ router.post('/', protect, upload.single('collegeLogo'), createCollege);
 
 // @route   GET /api/colleges
 router.get('/', protect, getAllColleges);
-
-// @route   GET /api/colleges/settings/attendance
-router.get('/settings/attendance', protect, getAttendanceSettings);
-
-// @route   PATCH /api/colleges/settings/attendance
-router.patch('/settings/attendance', protect, updateAttendanceSettings);
 
 // @route   GET /api/colleges/:id
 router.get('/:id', protect, getCollegeById);
