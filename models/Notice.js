@@ -11,7 +11,9 @@ const noticeSchema = new mongoose.Schema({
   details: { type: String, required: true },
   status: { type: String, enum: ['Published', 'Draft'], default: 'Draft' },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true },
-  attachments: [{ type: String }]
+  pdfs: [{ type: String }],
+  images: [{ type: String }],
+  link: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Notice', noticeSchema);

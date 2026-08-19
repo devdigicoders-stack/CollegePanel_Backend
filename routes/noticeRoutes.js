@@ -22,9 +22,9 @@ const upload = multer({ storage: storage });
 
 router.get('/stats', collegeProtect, noticeController.getNoticeStats);
 router.get('/', collegeProtect, noticeController.getNotices);
-router.post('/', collegeProtect, upload.array('attachments', 5), noticeController.createNotice);
+router.post('/', collegeProtect, upload.fields([{ name: 'pdfs', maxCount: 50 }, { name: 'images', maxCount: 50 }]), noticeController.createNotice);
 router.get('/:id', collegeProtect, noticeController.getNoticeById);
-router.put('/:id', collegeProtect, upload.array('attachments', 5), noticeController.updateNotice);
+router.put('/:id', collegeProtect, upload.fields([{ name: 'pdfs', maxCount: 50 }, { name: 'images', maxCount: 50 }]), noticeController.updateNotice);
 router.delete('/:id', collegeProtect, noticeController.deleteNotice);
 
 module.exports = router;

@@ -7,25 +7,25 @@ const ensureDefaultRoles = async (collegeId) => {
       name: 'Teacher',
       description: 'Default role for teaching staff',
       department: 'Academic',
-      permissions: ['View Dashboard', 'View Students', 'View Subjects', 'View Sections', 'View Assignments', 'Add Assignment', 'Edit Assignment', 'Delete Assignment', 'Grade Assignment', 'Enter Marks', 'View Results']
+      permissions: ['View Dashboard', 'View Students', 'View Subjects', 'View Sections', 'View Assignments', 'Add Assignment', 'Edit Assignment', 'Delete Assignment', 'Grade Assignment', 'Enter Marks', 'View Results', 'View Notices', 'Manage Notices']
     },
     {
       name: 'Student',
       description: 'Default role for enrolled students',
       department: 'Academic',
-      permissions: ['View Portal Dashboard', 'Submit Course Assignments', 'View Semester Results', 'Apply For Outings']
+      permissions: ['View Portal Dashboard', 'Submit Course Assignments', 'View Semester Results', 'Apply For Outings', 'View Notices']
     },
     {
       name: 'HOD',
       description: 'Head of Department',
       department: 'Academic',
-      permissions: ['View Dashboard', 'View Students', 'View Teachers', 'View Departments', 'View Courses', 'View Subjects', 'View Sections', 'View Assignments', 'View Results', 'View Employees']
+      permissions: ['View Dashboard', 'View Students', 'View Teachers', 'View Departments', 'View Courses', 'View Subjects', 'View Sections', 'View Assignments', 'View Results', 'View Employees', 'View Notices', 'Manage Notices']
     },
     {
       name: 'Hostel',
       description: 'Hostel Warden or Manager',
       department: 'Hostel',
-      permissions: ['View Dashboard', 'View Hostels', 'Manage Rooms', 'Manage Allocations', 'View Hostel Reports', 'Approve Leave Outing', 'Reject Leave Outing', 'Log Check In', 'Log Check Out', 'Manage Hostel Inventory', 'Add Hostel Notice', 'View Students']
+      permissions: ['View Dashboard', 'View Hostels', 'Manage Rooms', 'Manage Allocations', 'View Hostel Reports', 'Approve Leave Outing', 'Reject Leave Outing', 'Log Check In', 'Log Check Out', 'Manage Hostel Inventory', 'Add Hostel Notice', 'View Students', 'View Notices', 'Manage Notices']
     }
   ];
 
@@ -235,6 +235,7 @@ exports.getAvailablePermissions = async (req, res) => {
       { category: 'Hostel', permissions: ['View Hostels', 'Manage Rooms', 'Manage Allocations', 'View Hostel Reports'] },
       { category: 'Security & Gate', permissions: ['View Security Dashboard', 'Log Student Entry/Exit', 'Scan Gate Pass', 'Log Vehicle Registry', 'Log Security Incident'] },
       { category: 'Student Portal', permissions: ['View Portal Dashboard', 'Submit Course Assignments', 'View Semester Results', 'Pay Fees Online', 'Apply For Outings'] },
+      { category: 'Notice Board', permissions: ['View Notices', 'Manage Notices'] },
       { category: 'Reports', permissions: ['View All Reports', 'Export Reports', 'Generate Custom Reports'] },
       { category: 'Settings', permissions: ['View Settings', 'Edit Settings', 'Manage Roles', 'Manage Permissions', 'System Configuration'] }
     ];

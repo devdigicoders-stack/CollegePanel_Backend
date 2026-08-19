@@ -31,18 +31,29 @@ exports.getNotices = async (req, res) => {
 
 exports.createNotice = async (req, res) => {
   try {
-    const { noticeId, title, targetAudience, postedBy, postedByRole, department, dateOfPublishing, details, status } = req.body;
+    const { noticeId, title, targetAudience, postedBy, postedByRole, department, dateOfPublishing, details, status, link } = req.body;
     const existing = await Notice.findOne({ noticeId });
     if (existing) {
       return res.status(400).json({ message: 'Notice ID already exists' });
     }
-    const attachments = req.files ? req.files.map(file => `/uploads/notices/${file.filename}`) : [];
+    
+    let pdfs = [];
+    let images = [];
+    if (req.files) {
+      if (req.files['pdfs'] && req.files['pdfs'].length > 0) {
+        pdfs = req.files['pdfs'].map(file => `/uploads/notices/${file.filename}`);
+      }
+      if (req.files['images'] && req.files['images'].length > 0) {
+        images = req.files['images'].map(file => `/uploads/notices/${file.filename}`);
+      }
+    }
     
     const payload = {
       noticeId, title, targetAudience, postedBy, postedByRole, department,
-      dateOfPublishing, details,
+      dateOfPublishing, details, link,
       status: status || 'Draft',
-      attachments,
+      pdfs,
+      images,
       collegeId: req.college._id
     };
     const notice = await Notice.create(payload);
@@ -65,10 +76,13 @@ exports.getNoticeById = async (req, res) => {
 exports.updateNotice = async (req, res) => {
   try {
     const payload = { ...req.body };
-    if (req.files && req.files.length > 0) {
-      const newAttachments = req.files.map(file => `/uploads/notices/${file.filename}`);
-      // Simple replace for now
-      payload.attachments = newAttachments;
+    if (req.files) {
+      if (req.files['pdfs'] && req.files['pdfs'].length > 0) {
+        payload.pdfs = req.files['pdfs'].map(file => `/uploads/notices/${file.filename}`);
+      }
+      if (req.files['images'] && req.files['images'].length > 0) {
+        payload.images = req.files['images'].map(file => `/uploads/notices/${file.filename}`);
+      }
     }
     
     const notice = await Notice.findOneAndUpdate(
