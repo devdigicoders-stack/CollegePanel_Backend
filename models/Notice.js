@@ -9,7 +9,7 @@ const noticeSchema = new mongoose.Schema({
   department: { type: String },
   dateOfPublishing: { type: Date, required: true },
   details: { type: String, required: true },
-  status: { type: String, enum: ['Published', 'Draft'], default: 'Draft' },
+  status: { type: String, enum: ['Published', 'Draft'], default: 'Published' },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true },
   pdfs: [{ type: String }],
   images: [{ type: String }],
