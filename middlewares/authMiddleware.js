@@ -119,6 +119,7 @@ const collegeProtect = async (req, res, next) => {
              email: applicant.email,
              username: applicant.appNo,
              branch: applicant.branch,
+             course: applicant.course,
              collegeId: applicant.collegeId,
              isApplicant: true
           };

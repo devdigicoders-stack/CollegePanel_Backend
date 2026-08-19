@@ -88,7 +88,7 @@ exports.getDashboardStats = async (req, res) => {
         attendancePercentage: 0,
         totalClasses: 0,
         presentClasses: 0,
-        pendingAssignments: 0,
+        pendingAssignments: totalAssignments,
         submittedAssignments: 0,
         totalAssignments,
         totalMaterials,
@@ -99,14 +99,6 @@ exports.getDashboardStats = async (req, res) => {
       });
     }
 
-    // Attendance %
-    const attendanceRecords = await AttendanceRecord.find({ studentId, collegeId });
-    let present = 0, total = 0;
-    attendanceRecords.forEach(a => {
-      total++;
-      if (a.status === 'Present') present++;
-    });
-    const attendancePercentage = total > 0 ? ((present / total) * 100).toFixed(1) : 0;
 
     // Pending Assignments
     const submissions = await AssignmentSubmission.find({ studentId, collegeId }).select('assignmentId');
@@ -118,7 +110,9 @@ exports.getDashboardStats = async (req, res) => {
     }) : 0;
 
 
-
+    const attendancePercentage = 0;
+    const total = 0;
+    const present = 0;
 
     res.status(200).json({
       attendancePercentage,
