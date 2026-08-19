@@ -106,12 +106,24 @@ exports.deleteStudent = async (req, res) => {
 exports.getStudentFilters = async (req, res) => {
   try {
     const match = collegeFilter(req);
-    const [branches, years, sessions, courses] = await Promise.all([
+    const Student = require('../models/Student');
+    const Admission = require('../models/Admission');
+
+    const [branchesS, yearsS, sessionsS, coursesS, branchesA, yearsA, sessionsA, coursesA] = await Promise.all([
       Student.distinct('branch', match),
       Student.distinct('year', match),
       Student.distinct('session', match),
-      Student.distinct('course', match)
+      Student.distinct('course', match),
+      Admission.distinct('branch', match),
+      Admission.distinct('year', match),
+      Admission.distinct('session', match),
+      Admission.distinct('course', match)
     ]);
+    
+    const allBranches = [...new Set([...branchesS, ...branchesA])];
+    const allYears = [...new Set([...yearsS, ...yearsA])];
+    const sessions = [...new Set([...sessionsS, ...sessionsA])];
+    const allCourses = [...new Set([...coursesS, ...coursesA])];
     
     // Generate dynamic sessions for the last 4 years and next 2 years
     const currentYear = new Date().getFullYear();
@@ -127,10 +139,10 @@ exports.getStudentFilters = async (req, res) => {
     const allSessions = [...new Set([...dynamicSessions, ...sessions])];
     
     res.json({
-      branches: cleanAndSort(branches),
-      years: cleanAndSort(years),
+      branches: cleanAndSort(allBranches),
+      years: cleanAndSort(allYears),
       sessions: cleanAndSort(allSessions),
-      courses: cleanAndSort(courses)
+      courses: cleanAndSort(allCourses)
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching filters', error: error.message });

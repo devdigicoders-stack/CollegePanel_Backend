@@ -357,8 +357,24 @@ exports.getCollegeCategoryDetails = async (req, res) => {
         
         const students = await Student.find(query).sort({ createdAt: -1 });
         
-        // Also fetch admissions (unapproved) to show in Superadmin Students tab
-        const admissions = await Admission.find({ collegeId: id }).sort({ createdAt: -1 });
+        // Also fetch admissions (unapproved) with matching filters to show in Superadmin Students tab
+        const admissionQuery = { collegeId: id };
+        if (branch && branch !== 'All Branches' && branch !== 'All Departments' && branch !== '') admissionQuery.branch = branch;
+        if (year && year !== 'All Years' && year !== '') admissionQuery.year = year;
+        if (session && session !== 'All Sessions' && session !== '') admissionQuery.session = session;
+        if (course && course !== 'All Courses' && course !== '') admissionQuery.course = course;
+        
+        if (search && search !== '') {
+          admissionQuery.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { appNo: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } },
+            { mobile: { $regex: search, $options: 'i' } },
+            { branch: { $regex: search, $options: 'i' } }
+          ];
+        }
+
+        const admissions = await Admission.find(admissionQuery).sort({ createdAt: -1 });
         const mappedAdmissions = admissions.map(adm => ({
           _id: adm._id,
           studentId: adm.appNo || 'APP-XXX',
@@ -449,31 +465,39 @@ exports.getCollegeCategoryFilters = async (req, res) => {
     
     if (category.toLowerCase() === 'students') {
       const match = { collegeId: new (require('mongoose').Types.ObjectId)(id) };
-      // Note: We need to import Student at the top if it's not imported. Wait, Student is imported in directModelMap?
-      // Let's use directModelMap if possible, but it's defined inside the other function.
       const Student = require('../models/Student');
+      const Admission = require('../models/Admission');
 
-      const [branches, years, sessions, courses] = await Promise.all([
+      const [branchesS, yearsS, sessionsS, coursesS, branchesA, yearsA, sessionsA, coursesA] = await Promise.all([
         Student.distinct('branch', match),
         Student.distinct('year', match),
         Student.distinct('session', match),
-        Student.distinct('course', match)
+        Student.distinct('course', match),
+        Admission.distinct('branch', match),
+        Admission.distinct('year', match),
+        Admission.distinct('session', match),
+        Admission.distinct('course', match)
       ]);
       
       const cleanAndSort = (arr) => arr.filter(Boolean).sort();
       
+      const allBranches = [...new Set([...branchesS, ...branchesA])];
+      const allYears = [...new Set([...yearsS, ...yearsA])];
+      const allSessionsRaw = [...new Set([...sessionsS, ...sessionsA])];
+      const allCourses = [...new Set([...coursesS, ...coursesA])];
+
       const currentYear = new Date().getFullYear();
       const dynamicSessions = [];
       for (let i = currentYear - 4; i <= currentYear + 2; i++) {
         dynamicSessions.push(`${i}-${(i + 1).toString().slice(-2)}`);
       }
-      const allSessions = [...new Set([...dynamicSessions, ...sessions])];
+      const allSessions = [...new Set([...dynamicSessions, ...allSessionsRaw])];
       
       return res.json({
-        branches: cleanAndSort(branches),
-        years: cleanAndSort(years),
+        branches: cleanAndSort(allBranches),
+        years: cleanAndSort(allYears),
         sessions: cleanAndSort(allSessions),
-        courses: cleanAndSort(courses)
+        courses: cleanAndSort(allCourses)
       });
     }
 
