@@ -106,6 +106,27 @@ const collegeProtect = async (req, res, next) => {
         }
       }
 
+      // 4. Check if it's an applicant account (Public Admission)
+      const Admission = require('../models/Admission');
+      const applicant = await Admission.findById(decoded.id);
+      if (applicant) {
+        college = await College.findById(applicant.collegeId);
+        if (college) {
+          req.college = college;
+          req.student = {
+             _id: applicant._id,
+             studentName: applicant.name,
+             email: applicant.email,
+             username: applicant.appNo,
+             branch: applicant.branch,
+             collegeId: applicant.collegeId,
+             isApplicant: true
+          };
+          req.userRole = 'Student';
+          return next();
+        }
+      }
+
       return res.status(401).json({ message: 'User or College context not found' });
     } catch (error) {
       console.error('Auth Error:', error);
