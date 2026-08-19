@@ -358,7 +358,12 @@ exports.getCollegeCategoryDetails = async (req, res) => {
         const students = await Student.find(query).sort({ createdAt: -1 });
         
         // Also fetch admissions (unapproved) with matching filters to show in Superadmin Students tab
-        const admissionQuery = { collegeId: id };
+        const admissionQuery = { 
+          collegeId: id,
+          registrationStatus: { $ne: 'Registered' },
+          stage: { $ne: 'Admitted' },
+          status: { $ne: 'Approved' }
+        };
         if (branch && branch !== 'All Branches' && branch !== 'All Departments' && branch !== '') admissionQuery.branch = branch;
         if (year && year !== 'All Years' && year !== '') admissionQuery.year = year;
         if (session && session !== 'All Sessions' && session !== '') admissionQuery.session = session;
