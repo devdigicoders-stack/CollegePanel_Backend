@@ -73,7 +73,7 @@ exports.createCollege = async (req, res) => {
     const college = await College.create({
       collegeName,
       collegeCode,
-      collegeType: collegeType ? collegeType.charAt(0).toUpperCase() + collegeType.slice(1).toLowerCase() : undefined,
+      collegeType: collegeType ? (collegeType.toUpperCase() === 'PPP' ? 'PPP' : collegeType.charAt(0).toUpperCase() + collegeType.slice(1).toLowerCase()) : undefined,
       aicteCode: aicteCode || '',
       affiliationNumber: affiliationNumber || '',
       establishedYear: establishedYear || '',
@@ -269,7 +269,7 @@ exports.updateCollege = async (req, res) => {
     // Update fields
     college.collegeName = collegeName || college.collegeName;
     college.collegeCode = collegeCode || college.collegeCode;
-    college.collegeType = collegeType ? collegeType.charAt(0).toUpperCase() + collegeType.slice(1).toLowerCase() : college.collegeType;
+    college.collegeType = collegeType ? (collegeType.toUpperCase() === 'PPP' ? 'PPP' : collegeType.charAt(0).toUpperCase() + collegeType.slice(1).toLowerCase()) : college.collegeType;
     college.aicteCode = aicteCode !== undefined ? aicteCode : college.aicteCode;
     college.affiliationNumber = affiliationNumber !== undefined ? affiliationNumber : college.affiliationNumber;
     college.establishedYear = establishedYear !== undefined ? establishedYear : college.establishedYear;

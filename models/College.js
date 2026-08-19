@@ -5,7 +5,7 @@ const collegeSchema = new mongoose.Schema({
   // College Information
   collegeName: { type: String, required: true },
   collegeCode: { type: String, required: true, unique: true },
-  collegeType: { type: String, required: true, enum: ['Government', 'Private', 'Aided'] },
+  collegeType: { type: String, required: true, enum: ['Government', 'Private', 'Aided', 'PPP'] },
   aicteCode: { type: String, default: '' },
   affiliationNumber: { type: String, default: '' },
   establishedYear: { type: String, default: '' },
