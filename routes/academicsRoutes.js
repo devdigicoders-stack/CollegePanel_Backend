@@ -53,4 +53,14 @@ router.route('/sections/:id')
   .put(collegeProtect, academicsController.updateSection)
   .delete(collegeProtect, academicsController.deleteSection);
 
+
+// ============ SUBJECT ALLOCATIONS ============
+router.route('/allocations')
+  .get(collegeProtect, academicsController.getAllocations)
+  .post(collegeProtect, academicsController.createAllocation);
+
+router.route('/allocations/:id')
+  .put(collegeProtect, academicsController.updateAllocation)
+  .delete(collegeProtect, academicsController.deleteAllocation);
+
 module.exports = router;

@@ -38,8 +38,12 @@ router.get('/assignments', studentPortalController.getAssignments);
 router.post('/assignments/submit', studentPortalController.submitAssignment);
 
 // Phase 3 Routes
-router.get('/hostel', studentPortalController.getHostelDetails);
-router.post('/hostel/leaves', studentPortalController.applyHostelLeave);
+router.get('/hostel', collegeProtect, studentPortalController.getHostelDetails);
+router.post('/hostel/leave', collegeProtect, studentPortalController.applyHostelLeave);
+
+router.route('/live-notifications')
+  .get(collegeProtect, studentPortalController.getLiveNotifications)
+  .put(collegeProtect, studentPortalController.markNotificationsRead);
 
 // Phase 4 Routes
 router.get('/complaints', studentPortalController.getComplaints);

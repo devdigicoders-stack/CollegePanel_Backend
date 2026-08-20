@@ -1,6 +1,7 @@
 const Student = require('../models/Student');
 const Assignment = require('../models/Assignment');
 const AssignmentSubmission = require('../models/AssignmentSubmission');
+const LiveNotification = require('../models/LiveNotification');
 
 // Get profile
 exports.getProfile = async (req, res) => {
@@ -68,20 +69,35 @@ exports.getDashboardStats = async (req, res) => {
     const isApplicant = await Admission.exists({ _id: studentId, collegeId });
     
     // Always calculate totalAssignments based on available info
-    const queryOr = [];
-    if (req.student.course) queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
-    if (req.student.branch) queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
+    const yearStr = req.student.year ? req.student.year.replace(' Year', '') : '';
+    const yearToSemesters = {
+      '1st': ['1', '2', 'Sem 1', 'Sem 2'],
+      '2nd': ['3', '4', 'Sem 3', 'Sem 4'],
+      '3rd': ['5', '6', 'Sem 5', 'Sem 6'],
+      '4th': ['7', '8', 'Sem 7', 'Sem 8']
+    };
+    const semesters = yearToSemesters[yearStr] || [];
     
-    const totalAssignments = queryOr.length > 0 ? await Assignment.countDocuments({
+    const baseQuery = {
       collegeId,
-      $or: queryOr
-    }) : 0;
+      semester: { $in: semesters },
+      $or: []
+    };
+    
+    if (req.student.course) {
+      baseQuery.$or.push({ course: new RegExp(req.student.course, 'i') });
+    }
+    if (req.student.branch) {
+      baseQuery.$or.push({ department: new RegExp(req.student.branch, 'i') });
+      baseQuery.$or.push({ course: new RegExp(req.student.branch, 'i') }); // Fallback for older assignments
+    }
+    
+    if (baseQuery.$or.length === 0) delete baseQuery.$or;
+    
+    const totalAssignments = await Assignment.countDocuments(baseQuery);
     
     const StudyMaterial = require('../models/StudyMaterial');
-    const totalMaterials = queryOr.length > 0 ? await StudyMaterial.countDocuments({
-      collegeId,
-      $or: queryOr
-    }) : 0;
+    const totalMaterials = await StudyMaterial.countDocuments(baseQuery);
 
     if (isApplicant) {
       return res.json({
@@ -132,19 +148,33 @@ exports.getDashboardStats = async (req, res) => {
 // Get assignments
 exports.getAssignments = async (req, res) => {
   try {
-    const queryOr = [];
-    if (req.student.course) queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
-    if (req.student.branch) queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
-
-    if (queryOr.length === 0) {
-      return res.status(200).json([]);
+    const yearStr = req.student.year ? req.student.year.replace(' Year', '') : '';
+    const yearToSemesters = {
+      '1st': ['1', '2', 'Sem 1', 'Sem 2'],
+      '2nd': ['3', '4', 'Sem 3', 'Sem 4'],
+      '3rd': ['5', '6', 'Sem 5', 'Sem 6'],
+      '4th': ['7', '8', 'Sem 7', 'Sem 8']
+    };
+    const semesters = yearToSemesters[yearStr] || [];
+    
+    const baseQuery = {
+      collegeId: req.college._id,
+      semester: { $in: semesters },
+      $or: []
+    };
+    
+    if (req.student.course) {
+      baseQuery.$or.push({ course: new RegExp(req.student.course, 'i') });
     }
+    if (req.student.branch) {
+      baseQuery.$or.push({ department: new RegExp(req.student.branch, 'i') });
+      baseQuery.$or.push({ course: new RegExp(req.student.branch, 'i') }); // Fallback for older assignments
+    }
+    
+    if (baseQuery.$or.length === 0) delete baseQuery.$or;
 
-    // Only get assignments for student's course/branch
-    const assignments = await Assignment.find({ 
-      $or: queryOr,
-      collegeId: req.college._id 
-    })
+    // Only get assignments for student's course/branch/sem
+    const assignments = await Assignment.find(baseQuery)
       .populate('teacherId', 'name')
       .sort({ dueDate: 1 });
       
@@ -192,10 +222,40 @@ exports.submitAssignment = async (req, res) => {
     
     await submission.save();
     
-    // Increment the submittedCount in Assignment
     await Assignment.findByIdAndUpdate(assignmentId, {
       $inc: { submittedCount: 1 }
     });
+    
+    // Create notification for teacher
+    const studentInfo = await Student.findById(req.student._id).select('name appNo');
+    const studentName = studentInfo ? studentInfo.name : 'A student';
+    
+    if (assignment.teacherId) {
+      const teacherNotification = new LiveNotification({
+        userId: assignment.teacherId.toString(),
+        role: 'Teacher',
+        title: 'Assignment Submitted',
+        message: `${studentName} has submitted the assignment: ${assignment.title}`,
+        type: 'Assignment',
+        collegeId: req.college._id
+      });
+      
+      await teacherNotification.save();
+      
+      const io = req.app.get('io');
+      const connectedUsers = req.app.get('connectedUsers');
+      
+      if (io && connectedUsers) {
+        const socketId = connectedUsers.get(assignment.teacherId.toString());
+        if (socketId) {
+          io.to(socketId).emit('new_notification', {
+            title: 'Assignment Submitted',
+            message: `${studentName} has submitted the assignment: ${assignment.title}`,
+            type: 'Assignment'
+          });
+        }
+      }
+    }
     
     res.status(201).json({ message: 'Assignment submitted successfully', submission });
   } catch (error) {
@@ -284,7 +344,33 @@ exports.createComplaint = async (req, res) => {
     await complaint.save();
     res.status(201).json({ message: 'Complaint created successfully', complaint });
   } catch (error) {
-    res.status(500).json({ message: 'Error creating complaint', error: error.message });
+    res.status(500).json({ message: 'Error submitting complaint', error: error.message });
+  }
+};
+
+exports.getLiveNotifications = async (req, res) => {
+  try {
+    const studentId = req.student._id;
+    const notifications = await LiveNotification.find({ 
+      userId: studentId, 
+      collegeId: req.college._id 
+    }).sort({ createdAt: -1 }).limit(50);
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching notifications', error: error.message });
+  }
+};
+
+exports.markNotificationsRead = async (req, res) => {
+  try {
+    const studentId = req.student._id;
+    await LiveNotification.updateMany(
+      { userId: studentId, collegeId: req.college._id, isRead: false },
+      { $set: { isRead: true } }
+    );
+    res.json({ message: 'Notifications marked as read' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating notifications', error: error.message });
   }
 };
 

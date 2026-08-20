@@ -5,6 +5,7 @@ const assignmentSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
   course: { type: String, required: true },
+  department: { type: String }, // Maps to Student's branch
   subject: { type: String, required: true },
   semester: { type: String, required: true },
   section: { type: String, required: true },

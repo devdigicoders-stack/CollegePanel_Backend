@@ -45,6 +45,7 @@ const studentRoutes = require('./routes/studentRoutes');
 const admissionRoutes = require('./routes/admissionRoutes');
 const academicsRoutes = require('./routes/academicsRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
+const teacherPortalRoutes = require('./routes/teacherPortalRoutes');
 const designationRoutes = require('./routes/designationRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
@@ -71,6 +72,7 @@ app.use('/api/students', studentRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/academics', academicsRoutes);
 app.use('/api/teachers', teacherRoutes);
+app.use('/api/teacher-portal', teacherPortalRoutes);
 app.use('/api/designations', designationRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/report', reportRoutes);
@@ -99,6 +101,51 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const http = require('http');
+const { Server } = require('socket.io');
+
+const server = http.createServer(app);
+
+// Setup Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+// Store connected users: userId -> socketId
+const connectedUsers = new Map();
+
+io.on('connection', (socket) => {
+  console.log('New client connected:', socket.id);
+
+  socket.on('register', (userId) => {
+    if (userId) {
+      connectedUsers.set(userId, socket.id);
+      console.log(`User registered: ${userId} with socket ${socket.id}`);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    // Remove user from map on disconnect
+    for (const [userId, socketId] of connectedUsers.entries()) {
+      if (socketId === socket.id) {
+        connectedUsers.delete(userId);
+        console.log(`User unregistered: ${userId}`);
+        break;
+      }
+    }
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Make io accessible to routes via req.app.get('io')
+app.set('io', io);
+// Make connectedUsers accessible via req.app.get('connectedUsers')
+app.set('connectedUsers', connectedUsers);
+
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
