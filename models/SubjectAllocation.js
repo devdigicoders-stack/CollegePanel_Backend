@@ -49,6 +49,12 @@ const subjectAllocationSchema = new mongoose.Schema({
     type: String, 
     enum: ['Active', 'Inactive'], 
     default: 'Active' 
+  },
+  geoFence: {
+    isEnabled: { type: Boolean, default: false },
+    lat: { type: Number },
+    lng: { type: Number },
+    radius: { type: Number, default: 50 } // meters
   }
 }, { timestamps: true });
 

@@ -569,3 +569,27 @@ exports.markNotificationsRead = async (req, res) => {
   }
 };
 
+exports.updateGeoFence = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { isEnabled, lat, lng, radius } = req.body;
+    
+    const allocation = await SubjectAllocation.findOne({ _id: classId, collegeId: req.college._id });
+    if (!allocation) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+
+    // Update geo-fence settings
+    allocation.geoFence = {
+      isEnabled: isEnabled || false,
+      lat: lat || allocation.geoFence?.lat,
+      lng: lng || allocation.geoFence?.lng,
+      radius: radius || allocation.geoFence?.radius || 50
+    };
+
+    await allocation.save();
+    res.json({ message: 'Geo-fence settings updated successfully', data: allocation.geoFence });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating geo-fence settings', error: error.message });
+  }
+};

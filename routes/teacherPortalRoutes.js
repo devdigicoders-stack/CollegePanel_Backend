@@ -36,6 +36,9 @@ router.route('/class/:classId/attendance')
 router.route('/class/:classId/attendance/history')
   .get(collegeProtect, teacherPortalController.getClassAttendanceHistory);
 
+router.route('/class/:classId/geofence')
+  .put(collegeProtect, teacherPortalController.updateGeoFence);
+
 router.route('/class/:classId/notices')
   .get(collegeProtect, teacherPortalController.getClassNotices)
   .post(collegeProtect, uploadNotice.fields([{ name: 'pdfs', maxCount: 10 }, { name: 'images', maxCount: 10 }]), teacherPortalController.createClassNotice);

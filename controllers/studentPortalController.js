@@ -471,30 +471,72 @@ exports.getDownloads = async (req, res) => {
   }
 };
 
+// Haversine formula to calculate distance (in meters) between two coords
+const haversineDistance = (lat1, lng1, lat2, lng2) => {
+  const R = 6371000; // Earth's radius in meters
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 // Auto mark attendance from QR Scan
 exports.markAutoAttendance = async (req, res) => {
   try {
-    let { classId, date } = req.body;
+    let { classId, date, studentLat, studentLng } = req.body;
     const studentId = req.student._id;
 
     if (!classId) {
       return res.status(400).json({ message: 'Missing classId' });
     }
 
-    // If date is not provided, use today's date
+    // If date is not provided, use today's date (server date)
     if (!date) {
       const today = new Date();
-      // Adjust to local timezone offset if needed, but for now simple local date string
       const offset = today.getTimezoneOffset();
-      const localDate = new Date(today.getTime() - (offset*60*1000));
+      const localDate = new Date(today.getTime() - (offset * 60 * 1000));
       date = localDate.toISOString().split('T')[0];
     }
 
     // Verify the class allocation
     const allocation = await SubjectAllocation.findById(classId);
     if (!allocation) {
-      return res.status(404).json({ message: 'Class not found' });
+      return res.status(404).json({ message: 'Class not found. Invalid QR Code.' });
     }
+
+    // ── GEO-FENCE CHECK ──────────────────────────────────────────────
+    if (allocation.geoFence && allocation.geoFence.isEnabled) {
+      const { lat: classLat, lng: classLng, radius } = allocation.geoFence;
+
+      if (!classLat || !classLng) {
+        return res.status(400).json({ message: 'Geo-fence is enabled but class location is not configured. Contact your teacher.' });
+      }
+
+      if (studentLat === undefined || studentLat === null || studentLng === undefined || studentLng === null) {
+        return res.status(403).json({ 
+          message: 'Location access is required to mark attendance. Please allow location permission and scan again.',
+          code: 'LOCATION_REQUIRED'
+        });
+      }
+
+      const distance = haversineDistance(classLat, classLng, parseFloat(studentLat), parseFloat(studentLng));
+      const effectiveRadius = radius || 50;
+
+      if (distance > effectiveRadius) {
+        return res.status(403).json({ 
+          message: `You are ${Math.round(distance)} meters away from the classroom. You must be within ${effectiveRadius} meters to mark attendance.`,
+          code: 'OUT_OF_BOUNDS',
+          distance: Math.round(distance),
+          allowedRadius: effectiveRadius
+        });
+      }
+    }
+    // ────────────────────────────────────────────────────────────────
 
     // Validate if student belongs to this class
     const branchRegex = new RegExp(allocation.courseName, 'i');
@@ -513,7 +555,7 @@ exports.markAutoAttendance = async (req, res) => {
       return res.status(403).json({ message: 'You are not enrolled in this class.' });
     }
 
-    // Find or create StudentAttendance
+    // Find or create StudentAttendance record for today
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
