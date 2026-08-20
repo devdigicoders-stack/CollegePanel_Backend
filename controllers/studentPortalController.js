@@ -99,7 +99,14 @@ exports.getDashboardStats = async (req, res) => {
     const totalAssignments = await Assignment.countDocuments(baseQuery);
     
     const StudyMaterial = require('../models/StudyMaterial');
-    const totalMaterials = await StudyMaterial.countDocuments(baseQuery);
+    const materialQueryOr = [];
+    if (req.student.course) materialQueryOr.push({ course: new RegExp(req.student.course, 'i') });
+    if (req.student.branch) materialQueryOr.push({ course: new RegExp(req.student.branch, 'i') });
+    
+    const totalMaterials = materialQueryOr.length > 0 ? await StudyMaterial.countDocuments({
+      collegeId,
+      $or: materialQueryOr
+    }) : 0;
 
     if (isApplicant) {
       return res.json({
@@ -121,11 +128,10 @@ exports.getDashboardStats = async (req, res) => {
     // Pending Assignments
     const submissions = await AssignmentSubmission.find({ studentId, collegeId }).select('assignmentId');
     const submittedIds = submissions.map(s => s.assignmentId.toString());
-    const pendingAssignments = queryOr.length > 0 ? await Assignment.countDocuments({
-      collegeId,
-      $or: queryOr,
+    const pendingAssignments = await Assignment.countDocuments({
+      ...baseQuery,
       _id: { $nin: submittedIds }
-    }) : 0;
+    });
 
 
     const attendancePercentage = 0;
