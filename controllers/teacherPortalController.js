@@ -192,6 +192,31 @@ exports.getClassAttendanceHistory = async (req, res) => {
   }
 };
 
+// Get single student attendance history for a class
+exports.getSingleStudentAttendanceHistory = async (req, res) => {
+  try {
+    const { classId, studentId } = req.params;
+
+    const attendances = await StudentAttendance.find({
+      classId,
+      collegeId: req.college._id,
+      'records.studentId': studentId
+    }).sort({ date: -1 });
+
+    const history = attendances.map(att => {
+      const record = att.records.find(r => r.studentId.toString() === studentId.toString());
+      return {
+        date: att.date,
+        status: record ? record.status : 'Absent'
+      };
+    });
+
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching student history', error: error.message });
+  }
+};
+
 // Save or update attendance for a class on a specific date
 exports.saveClassAttendance = async (req, res) => {
   try {

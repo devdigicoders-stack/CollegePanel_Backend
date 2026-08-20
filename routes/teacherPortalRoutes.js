@@ -36,6 +36,9 @@ router.route('/class/:classId/attendance')
 router.route('/class/:classId/attendance/history')
   .get(collegeProtect, teacherPortalController.getClassAttendanceHistory);
 
+router.route('/class/:classId/student/:studentId/attendance/history')
+  .get(collegeProtect, teacherPortalController.getSingleStudentAttendanceHistory);
+
 router.route('/class/:classId/geofence')
   .put(collegeProtect, teacherPortalController.updateGeoFence);
 

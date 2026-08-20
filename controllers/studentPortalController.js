@@ -79,7 +79,7 @@ exports.getDashboardStats = async (req, res) => {
       '4th': ['7', '8', 'Sem 7', 'Sem 8']
     };
     const semesters = yearToSemesters[yearStr] || [];
-    
+
     const baseQuery = {
       collegeId,
       semester: { $in: semesters },
