@@ -169,7 +169,7 @@ exports.getClassAttendanceHistory = async (req, res) => {
     const attendances = await StudentAttendance.find({
       classId,
       collegeId: req.college._id
-    }).sort({ date: -1 });
+    }).populate('records.studentId', 'studentName studentId rollNo').sort({ date: -1 });
 
     const history = attendances.map(att => {
       const total = att.records.length;
@@ -182,7 +182,8 @@ exports.getClassAttendanceHistory = async (req, res) => {
         total,
         present,
         absent,
-        late
+        late,
+        records: att.records
       };
     });
 
