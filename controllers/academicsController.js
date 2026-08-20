@@ -505,6 +505,7 @@ exports.createAllocation = async (req, res) => {
       teacherName: teacherDoc.name,
       course,
       courseName: courseDoc.name,
+      department: courseDoc.department,
       semester,
       subject,
       subjectName: subjectDoc.name,

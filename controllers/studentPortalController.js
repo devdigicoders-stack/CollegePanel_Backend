@@ -2,6 +2,8 @@ const Student = require('../models/Student');
 const Assignment = require('../models/Assignment');
 const AssignmentSubmission = require('../models/AssignmentSubmission');
 const LiveNotification = require('../models/LiveNotification');
+const SubjectAllocation = require('../models/SubjectAllocation');
+const StudentAttendance = require('../models/StudentAttendance');
 
 // Get profile
 exports.getProfile = async (req, res) => {
@@ -466,5 +468,99 @@ exports.getDownloads = async (req, res) => {
     res.status(200).json(docs);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching downloads', error: error.message });
+  }
+};
+
+// Auto mark attendance from QR Scan
+exports.markAutoAttendance = async (req, res) => {
+  try {
+    let { classId, date } = req.body;
+    const studentId = req.student._id;
+
+    if (!classId) {
+      return res.status(400).json({ message: 'Missing classId' });
+    }
+
+    // If date is not provided, use today's date
+    if (!date) {
+      const today = new Date();
+      // Adjust to local timezone offset if needed, but for now simple local date string
+      const offset = today.getTimezoneOffset();
+      const localDate = new Date(today.getTime() - (offset*60*1000));
+      date = localDate.toISOString().split('T')[0];
+    }
+
+    // Verify the class allocation
+    const allocation = await SubjectAllocation.findById(classId);
+    if (!allocation) {
+      return res.status(404).json({ message: 'Class not found' });
+    }
+
+    // Validate if student belongs to this class
+    const branchRegex = new RegExp(allocation.courseName, 'i');
+    const isBranchMatch = branchRegex.test(req.student.branch);
+    
+    const s = Number(allocation.semester);
+    let targetYear = '';
+    if (s === 1 || s === 2) targetYear = '1st Year';
+    else if (s === 3 || s === 4) targetYear = '2nd Year';
+    else if (s === 5 || s === 6) targetYear = '3rd Year';
+    else if (s === 7 || s === 8) targetYear = '4th Year';
+
+    const isYearMatch = req.student.year === targetYear;
+
+    if (!isBranchMatch || !isYearMatch) {
+      return res.status(403).json({ message: 'You are not enrolled in this class.' });
+    }
+
+    // Find or create StudentAttendance
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let attendance = await StudentAttendance.findOne({
+      classId,
+      collegeId: req.college._id,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    if (!attendance) {
+      attendance = new StudentAttendance({
+        classId,
+        teacherId: allocation.teacher,
+        date: startOfDay,
+        records: [],
+        collegeId: req.college._id
+      });
+    }
+
+    // Check if student already in records
+    const existingRecordIndex = attendance.records.findIndex(r => r.studentId.toString() === studentId.toString());
+    
+    if (existingRecordIndex >= 0) {
+      if (attendance.records[existingRecordIndex].status === 'Present') {
+        return res.status(200).json({ message: 'Attendance already marked as Present.', status: 'already_marked' });
+      }
+      attendance.records[existingRecordIndex].status = 'Present';
+    } else {
+      attendance.records.push({
+        studentId,
+        status: 'Present',
+        remarks: 'Auto-marked via QR'
+      });
+    }
+
+    await attendance.save();
+
+    // Emit real-time event to the teacher (if online)
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('attendance_marked', { classId, studentId, date: startOfDay.toISOString().split('T')[0], status: 'Present' });
+    }
+
+    res.status(200).json({ message: 'Attendance marked successfully!', status: 'success' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error processing attendance scan', error: error.message });
   }
 };

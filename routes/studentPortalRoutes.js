@@ -37,6 +37,8 @@ router.get('/dashboard/stats', studentPortalController.getDashboardStats);
 router.get('/assignments', studentPortalController.getAssignments);
 router.post('/assignments/submit', studentPortalController.submitAssignment);
 
+router.post('/attendance/mark-auto', studentPortalController.markAutoAttendance);
+
 // Phase 3 Routes
 router.get('/hostel', collegeProtect, studentPortalController.getHostelDetails);
 router.post('/hostel/leave', collegeProtect, studentPortalController.applyHostelLeave);

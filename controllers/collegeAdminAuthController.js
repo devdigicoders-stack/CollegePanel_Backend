@@ -124,7 +124,26 @@ exports.loginCollegeAdmin = async (req, res) => {
     if (applicant) {
       // For applicant, password is DOB in YYYY-MM-DD format
       const dobStr = applicant.dob ? new Date(applicant.dob).toISOString().split('T')[0] : null;
-      if (password === dobStr) {
+      if (password === dobStr || password === applicant.mobile) { // Support mobile as fallback if needed
+        
+        // FIX: If applicant is already registered as a student, log them in as a full Student!
+        if (applicant.studentId) {
+          const registeredStudent = await Student.findOne({ studentId: applicant.studentId });
+          if (registeredStudent && registeredStudent.status === 'Active') {
+            const collegeDetail = await College.findById(registeredStudent.collegeId);
+            return res.json({
+              _id: registeredStudent._id,
+              name: registeredStudent.studentName,
+              collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+              email: registeredStudent.email,
+              username: registeredStudent.username || registeredStudent.studentId,
+              role: 'Student',
+              department: registeredStudent.branch,
+              token: generateToken(registeredStudent._id, 'Student'),
+            });
+          }
+        }
+
         const collegeDetail = await College.findById(applicant.collegeId);
         return res.json({
           _id: applicant._id,

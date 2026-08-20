@@ -39,7 +39,7 @@ exports.getDashboardStats = async (req, res) => {
       const year = getYearFromSemester(c.semester);
       let query = { 
         collegeId, 
-        branch: c.courseName, 
+        branch: new RegExp(c.courseName, 'i'), 
         status: 'Active'
       };
       if (year) query.year = year;
@@ -49,23 +49,34 @@ exports.getDashboardStats = async (req, res) => {
     const studentsCounts = await Promise.all(studentQueries);
     totalStudents = studentsCounts.reduce((a, b) => a + b, 0);
 
-    // Recent Notices count (notices targeting this teacher or their departments/classes)
+    // Recent Notices count
     const noticesCount = await Notice.countDocuments({
       collegeId,
-      status: 'Active'
+      status: 'Published'
     });
 
     // Assignments count
     const assignmentsCount = await Assignment.countDocuments({
       collegeId,
-      createdBy: teacherId
+      teacherId: teacherId
     });
+
+    // Upcoming Classes (just top 3 allocated classes)
+    const upcomingClasses = classes.slice(0, 3);
+    
+    // Recent Notices data
+    const recentNotices = await Notice.find({
+      collegeId,
+      status: 'Published'
+    }).sort({ createdAt: -1 }).limit(3);
 
     res.json({
       classesCount: classes.length,
       studentsCount: totalStudents,
       noticesCount,
-      assignmentsCount
+      assignmentsCount,
+      upcomingClasses,
+      recentNotices
     });
 
   } catch (error) {
@@ -105,7 +116,7 @@ exports.getClassStudents = async (req, res) => {
     const targetYear = getYearFromSemester(allocation.semester);
     
     let query = {
-      branch: allocation.courseName,
+      branch: new RegExp(allocation.courseName, 'i'),
       collegeId: req.college._id,
       status: 'Active'
     };
@@ -147,6 +158,37 @@ exports.getClassAttendance = async (req, res) => {
     res.json(attendance || { records: [] });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching attendance', error: error.message });
+  }
+};
+
+// Get attendance history for a class
+exports.getClassAttendanceHistory = async (req, res) => {
+  try {
+    const { classId } = req.params;
+
+    const attendances = await StudentAttendance.find({
+      classId,
+      collegeId: req.college._id
+    }).sort({ date: -1 });
+
+    const history = attendances.map(att => {
+      const total = att.records.length;
+      const present = att.records.filter(r => r.status === 'Present').length;
+      const absent = att.records.filter(r => r.status === 'Absent').length;
+      const late = att.records.filter(r => r.status === 'Late').length;
+      return {
+        _id: att._id,
+        date: att.date,
+        total,
+        present,
+        absent,
+        late
+      };
+    });
+
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching attendance history', error: error.message });
   }
 };
 
@@ -340,6 +382,59 @@ exports.getMyComplaints = async (req, res) => {
     res.json(complaints);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching complaints', error: error.message });
+  }
+};
+
+// Get assignment submissions
+exports.getAssignmentSubmissions = async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const AssignmentSubmission = require('../models/AssignmentSubmission');
+    const submissions = await AssignmentSubmission.find({ assignmentId, collegeId: req.college._id }).populate('studentId', 'studentName studentId rollNo email');
+    res.json(submissions);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching submissions', error: error.message });
+  }
+};
+
+// Grade assignment submission
+exports.gradeSubmission = async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { grade, remarks } = req.body;
+    const AssignmentSubmission = require('../models/AssignmentSubmission');
+    
+    const submission = await AssignmentSubmission.findOneAndUpdate(
+      { _id: submissionId, collegeId: req.college._id },
+      { grade, remarks, status: 'Graded' },
+      { new: true }
+    ).populate('assignmentId');
+
+    if (!submission) return res.status(404).json({ message: 'Submission not found' });
+
+    const LiveNotification = require('../models/LiveNotification');
+    const notification = new LiveNotification({
+      userId: submission.studentId.toString(),
+      role: 'Student',
+      title: 'Assignment Graded',
+      message: `Your submission for '${submission.assignmentId.title}' has been graded.`,
+      type: 'Assignment',
+      collegeId: req.college._id
+    });
+    await notification.save();
+
+    const io = req.app.get('io');
+    const connectedUsers = req.app.get('connectedUsers');
+    if (io && connectedUsers) {
+      const socketId = connectedUsers.get(submission.studentId.toString());
+      if (socketId) {
+        io.to(socketId).emit('new_notification', notification);
+      }
+    }
+
+    res.json({ message: 'Submission graded successfully', submission });
+  } catch (error) {
+    res.status(500).json({ message: 'Error grading submission', error: error.message });
   }
 };
 
