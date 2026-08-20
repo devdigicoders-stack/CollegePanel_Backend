@@ -604,7 +604,7 @@ exports.markAutoAttendance = async (req, res) => {
     // Emit real-time event to the teacher (if online)
     const io = req.app.get('io');
     if (io) {
-      io.emit('attendance_marked', { classId, studentId, date: startOfDay.toISOString().split('T')[0], status: 'Present' });
+      io.emit('attendance_marked', { classId, studentId, date, status: 'Present' });
     }
 
     res.status(200).json({ message: 'Attendance marked successfully!', status: 'success' });
