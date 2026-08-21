@@ -92,6 +92,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         email: teacher.email,
         username: teacher.username,
         role: 'Teacher Role',
+        designation: teacher.designation,
         department: teacher.department,
         collegeId: teacher.collegeId,
         permissions: permissions,
@@ -253,6 +254,7 @@ exports.getMe = async (req, res) => {
         email: req.teacher.email,
         username: req.teacher.username,
         role: 'Teacher Role',
+        designation: req.teacher.designation,
         department: req.teacher.department,
         collegeName
       };

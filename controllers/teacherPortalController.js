@@ -30,8 +30,13 @@ exports.getDashboardStats = async (req, res) => {
     }
     const collegeId = req.college._id;
 
-    // Get classes for this teacher
-    const classes = await SubjectAllocation.find({ teacher: teacherId, collegeId, status: 'Active' });
+    let classQuery = { collegeId, status: 'Active' };
+    if (req.teacher && req.teacher.designation === 'HOD' && req.teacher.department) {
+      classQuery.department = req.teacher.department;
+    } else {
+      classQuery.teacher = teacherId;
+    }
+    const classes = await SubjectAllocation.find(classQuery);
     
     // Total students (sum of unique students across these classes)
     let totalStudents = 0;
@@ -50,27 +55,24 @@ exports.getDashboardStats = async (req, res) => {
     totalStudents = studentsCounts.reduce((a, b) => a + b, 0);
 
     // Recent Notices count
-    const noticesCount = await Notice.countDocuments({
-      collegeId,
-      postedById: teacherId,
-      status: 'Published'
-    });
+    let noticeQuery = { collegeId, status: 'Published' };
+    if (!(req.teacher && req.teacher.designation === 'HOD')) {
+      noticeQuery.postedById = teacherId;
+    }
+    const noticesCount = await Notice.countDocuments(noticeQuery);
 
     // Assignments count
-    const assignmentsCount = await Assignment.countDocuments({
-      collegeId,
-      teacherId: teacherId
-    });
+    let assignQuery = { collegeId };
+    if (!(req.teacher && req.teacher.designation === 'HOD')) {
+      assignQuery.teacherId = teacherId;
+    }
+    const assignmentsCount = await Assignment.countDocuments(assignQuery);
 
     // Upcoming Classes (just top 3 allocated classes)
     const upcomingClasses = classes.slice(0, 3);
     
     // Recent Notices data
-    const recentNotices = await Notice.find({
-      collegeId,
-      postedById: teacherId,
-      status: 'Published'
-    }).sort({ createdAt: -1 }).limit(3);
+    const recentNotices = await Notice.find(noticeQuery).sort({ createdAt: -1 }).limit(3);
 
     res.json({
       classesCount: classes.length,
@@ -93,11 +95,14 @@ exports.getMyClasses = async (req, res) => {
       return res.status(401).json({ message: 'Teacher identification failed.' });
     }
 
-    const classes = await SubjectAllocation.find({ 
-      teacher: teacherId,
-      collegeId: req.college._id,
-      status: 'Active'
-    }).sort({ semester: 1, subjectName: 1 });
+    let query = { collegeId: req.college._id, status: 'Active' };
+    if (req.teacher && req.teacher.designation === 'HOD' && req.teacher.department) {
+      query.department = req.teacher.department;
+    } else {
+      query.teacher = teacherId;
+    }
+
+    const classes = await SubjectAllocation.find(query).sort({ semester: 1, subjectName: 1 });
 
     res.json(classes);
   } catch (error) {
@@ -269,10 +274,11 @@ exports.saveClassAttendance = async (req, res) => {
 // Get notices targeted to this class
 exports.getClassNotices = async (req, res) => {
   try {
-    const notices = await Notice.find({
-      collegeId: req.college._id,
-      postedById: getTeacherId(req)
-    }).sort({ createdAt: -1 });
+    let query = { collegeId: req.college._id };
+    if (!(req.teacher && req.teacher.designation === 'HOD')) {
+      query.postedById = getTeacherId(req);
+    }
+    const notices = await Notice.find(query).sort({ createdAt: -1 });
 
     res.json(notices);
   } catch (error) {
@@ -340,12 +346,15 @@ exports.getClassStudyMaterials = async (req, res) => {
     
     if (!allocation) return res.status(404).json({ message: 'Class not found' });
 
-    const materials = await StudyMaterial.find({
+    let query = {
       course: allocation.courseName,
       subject: allocation.subjectName,
-      collegeId: req.college._id,
-      uploadedBy: getTeacherId(req)
-    }).populate('uploadedBy', 'name').sort({ createdAt: -1 });
+      collegeId: req.college._id
+    };
+    if (!(req.teacher && req.teacher.designation === 'HOD')) {
+      query.uploadedBy = getTeacherId(req);
+    }
+    const materials = await StudyMaterial.find(query).populate('uploadedBy', 'name').sort({ createdAt: -1 });
 
     res.json(materials);
   } catch (error) {
@@ -388,13 +397,16 @@ exports.getClassAssignments = async (req, res) => {
     
     if (!allocation) return res.status(404).json({ message: 'Class not found' });
 
-    const assignments = await Assignment.find({
+    let query = {
       course: allocation.courseName,
       subject: allocation.subjectName,
       semester: allocation.semester,
-      collegeId: req.college._id,
-      teacherId: getTeacherId(req)
-    }).sort({ createdAt: -1 });
+      collegeId: req.college._id
+    };
+    if (!(req.teacher && req.teacher.designation === 'HOD')) {
+      query.teacherId = getTeacherId(req);
+    }
+    const assignments = await Assignment.find(query).sort({ createdAt: -1 });
 
     res.json(assignments);
   } catch (error) {
