@@ -52,6 +52,7 @@ exports.getDashboardStats = async (req, res) => {
     // Recent Notices count
     const noticesCount = await Notice.countDocuments({
       collegeId,
+      postedById: teacherId,
       status: 'Published'
     });
 
@@ -67,6 +68,7 @@ exports.getDashboardStats = async (req, res) => {
     // Recent Notices data
     const recentNotices = await Notice.find({
       collegeId,
+      postedById: teacherId,
       status: 'Published'
     }).sort({ createdAt: -1 }).limit(3);
 
@@ -269,8 +271,7 @@ exports.getClassNotices = async (req, res) => {
   try {
     const notices = await Notice.find({
       collegeId: req.college._id,
-      // Target audiences that might include this class
-      // In a real system, you'd filter by notice.department == class.department
+      postedById: getTeacherId(req)
     }).sort({ createdAt: -1 });
 
     res.json(notices);
@@ -305,6 +306,7 @@ exports.createClassNotice = async (req, res) => {
       pdfs,
       images,
       postedBy: req.teacher ? req.teacher.name : (req.employee ? req.employee.name : 'Teacher'),
+      postedById: getTeacherId(req),
       postedByRole: 'Teacher',
       dateOfPublishing: dateOfPublishing ? new Date(dateOfPublishing) : new Date(),
       status: 'Published',
@@ -341,7 +343,8 @@ exports.getClassStudyMaterials = async (req, res) => {
     const materials = await StudyMaterial.find({
       course: allocation.courseName,
       subject: allocation.subjectName,
-      collegeId: req.college._id
+      collegeId: req.college._id,
+      uploadedBy: getTeacherId(req)
     }).populate('uploadedBy', 'name').sort({ createdAt: -1 });
 
     res.json(materials);
@@ -389,7 +392,8 @@ exports.getClassAssignments = async (req, res) => {
       course: allocation.courseName,
       subject: allocation.subjectName,
       semester: allocation.semester,
-      collegeId: req.college._id
+      collegeId: req.college._id,
+      teacherId: getTeacherId(req)
     }).sort({ createdAt: -1 });
 
     res.json(assignments);

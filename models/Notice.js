@@ -5,6 +5,7 @@ const noticeSchema = new mongoose.Schema({
   title: { type: String, required: true },
   targetAudience: { type: String, enum: ['All Students', 'All Staff', 'All Parents', 'Specific Department', 'Specific Course', 'Hostel Residents'], required: true },
   postedBy: { type: String, required: true },
+  postedById: { type: mongoose.Schema.Types.ObjectId, refPath: 'postedByRole' },
   postedByRole: { type: String, required: true },
   department: { type: String },
   dateOfPublishing: { type: Date, required: true },
