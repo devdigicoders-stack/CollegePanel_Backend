@@ -456,6 +456,9 @@ exports.getPublicFormOptions = async (req, res) => {
   try {
     const { collegeId } = req.params;
     const Course = require('../models/Course');
+    const College = require('../models/College');
+    const college = await College.findById(collegeId);
+
     const branches = await Course.find({ collegeId, status: 'Active' }).select('name department -_id');
     
     const currentYear = new Date().getFullYear();
@@ -465,6 +468,7 @@ exports.getPublicFormOptions = async (req, res) => {
     }
 
     res.json({
+      collegeName: college ? college.collegeName : '',
       branches: branches.map(b => b.name),
       sessions,
       years: ['1st Year', '2nd Year', '3rd Year', '4th Year'],

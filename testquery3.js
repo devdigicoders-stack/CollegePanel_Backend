@@ -3,7 +3,7 @@ const Assignment = require('./models/Assignment');
 const Admission = require('./models/Admission');
 const Student = require('./models/Student');
 
-mongoose.connect('mongodb+srv://digicodersdevelopment_db_user:KoJGvdKsGU9IQQvk@cluster0.9ssqshr.mongodb.net/crm_clg_dct?retryWrites=true&w=majority').then(async () => {
+mongoose.connect('mongodb+srv://DigiCodersdevelopment_db_user:KoJGvdKsGU9IQQvk@cluster0.9ssqshr.mongodb.net/crm_clg_dct?retryWrites=true&w=majority').then(async () => {
   const applicants = await Admission.find();
   console.log('--- APPLICANTS ---');
   for (const a of applicants) {

@@ -4,7 +4,7 @@ const Student = require('./models/Student');
 const StudentFee = require('./models/StudentFee');
 const FeeStructure = require('./models/FeeStructure');
 
-mongoose.connect('mongodb+srv://digicodersdevelopment_db_user:KoJGvdKsGU9IQQvk@cluster0.9ssqshr.mongodb.net/crm_clg_dct?retryWrites=true&w=majority').then(async () => {
+mongoose.connect('mongodb+srv://DigiCodersdevelopment_db_user:KoJGvdKsGU9IQQvk@cluster0.9ssqshr.mongodb.net/crm_clg_dct?retryWrites=true&w=majority').then(async () => {
   try {
     const admissions = await Admission.find({ stage: 'Admitted', registrationStatus: 'Registered' });
     console.log(`Found ${admissions.length} registered admissions.`);
