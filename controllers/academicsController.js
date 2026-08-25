@@ -32,15 +32,14 @@ exports.getDepartmentById = async (req, res) => {
 
 exports.createDepartment = async (req, res) => {
   try {
-    const { name, hod, totalFaculty } = req.body;
+    const { name, totalFaculty } = req.body;
     
-    if (!name || !hod) {
-      return res.status(400).json({ message: 'Department name and HOD are required' });
+    if (!name) {
+      return res.status(400).json({ message: 'Course name is required' });
     }
 
     const department = await Department.create({
       name,
-      hod,
       totalFaculty: totalFaculty || 0,
       collegeId: req.college._id
     });
@@ -53,17 +52,16 @@ exports.createDepartment = async (req, res) => {
 
 exports.updateDepartment = async (req, res) => {
   try {
-    const { name, hod, totalFaculty } = req.body;
+    const { name, totalFaculty } = req.body;
     
     let department = await Department.findOne({
       _id: req.params.id,
       collegeId: req.college._id
     });
 
-    if (!department) return res.status(404).json({ message: 'Department not found' });
+    if (!department) return res.status(404).json({ message: 'Course not found' });
 
     if (name) department.name = name;
-    if (hod) department.hod = hod;
     if (totalFaculty !== undefined) department.totalFaculty = totalFaculty;
 
     await department.save();
@@ -113,19 +111,20 @@ exports.getCourseById = async (req, res) => {
 
 exports.createCourse = async (req, res) => {
   try {
-    const { code, name, department, duration, totalSemesters, status } = req.body;
+    const { code, name, department, hod, duration, totalSemesters, status } = req.body;
     
-    if (!code || !name || !department || !duration || !totalSemesters) {
+    if (!code || !name || !department || !hod || !duration || !totalSemesters) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
     const courseExists = await Course.findOne({ code });
-    if (courseExists) return res.status(400).json({ message: 'Course code already exists' });
+    if (courseExists) return res.status(400).json({ message: 'Branch code already exists' });
 
     const course = await Course.create({
       code,
       name,
       department,
+      hod,
       duration,
       totalSemesters,
       status: status || 'Active',
@@ -140,18 +139,19 @@ exports.createCourse = async (req, res) => {
 
 exports.updateCourse = async (req, res) => {
   try {
-    const { code, name, department, duration, totalSemesters, status } = req.body;
+    const { code, name, department, hod, duration, totalSemesters, status } = req.body;
     
     let course = await Course.findOne({
       _id: req.params.id,
       collegeId: req.college._id
     });
 
-    if (!course) return res.status(404).json({ message: 'Course not found' });
+    if (!course) return res.status(404).json({ message: 'Branch not found' });
 
     if (code) course.code = code;
     if (name) course.name = name;
     if (department) course.department = department;
+    if (hod) course.hod = hod;
     if (duration) course.duration = duration;
     if (totalSemesters) course.totalSemesters = totalSemesters;
     if (status) course.status = status;
@@ -203,9 +203,9 @@ exports.getSemesterById = async (req, res) => {
 
 exports.createSemester = async (req, res) => {
   try {
-    const { semesterNumber, courseName, startDate, endDate, totalWeeks, status } = req.body;
+    const { semesterNumber, courseName, startDate, status } = req.body;
     
-    if (!semesterNumber || !courseName || !startDate || !endDate) {
+    if (!semesterNumber || !courseName || !startDate) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
@@ -213,8 +213,6 @@ exports.createSemester = async (req, res) => {
       semesterNumber,
       courseName,
       startDate,
-      endDate,
-      totalWeeks: totalWeeks || 16,
       status: status || 'Upcoming',
       collegeId: req.college._id
     });
@@ -227,7 +225,7 @@ exports.createSemester = async (req, res) => {
 
 exports.updateSemester = async (req, res) => {
   try {
-    const { semesterNumber, courseName, startDate, endDate, totalWeeks, status } = req.body;
+    const { semesterNumber, courseName, startDate, status } = req.body;
     
     let semester = await Semester.findOne({
       _id: req.params.id,
@@ -239,8 +237,6 @@ exports.updateSemester = async (req, res) => {
     if (semesterNumber) semester.semesterNumber = semesterNumber;
     if (courseName) semester.courseName = courseName;
     if (startDate) semester.startDate = startDate;
-    if (endDate) semester.endDate = endDate;
-    if (totalWeeks) semester.totalWeeks = totalWeeks;
     if (status) semester.status = status;
 
     await semester.save();

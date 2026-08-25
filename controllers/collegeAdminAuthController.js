@@ -127,6 +127,14 @@ exports.loginCollegeAdmin = async (req, res) => {
       const dobStr = applicant.dob ? new Date(applicant.dob).toISOString().split('T')[0] : null;
       if (password === dobStr || password === applicant.mobile) { // Support mobile as fallback if needed
         
+        if (applicant.status === 'Rejected') {
+          return res.status(403).json({ message: 'Your application has been rejected. Please contact the administration.' });
+        }
+        
+        if (applicant.status !== 'Approved') {
+          return res.status(403).json({ message: 'Your application is currently pending. You can login only after it is approved by the admin.' });
+        }
+
         // FIX: If applicant is already registered as a student, log them in as a full Student!
         if (applicant.studentId) {
           const registeredStudent = await Student.findOne({ studentId: applicant.studentId });

@@ -4,6 +4,7 @@ const courseSchema = new mongoose.Schema({
   code: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   department: { type: String, required: true },
+  hod: { type: String, required: true },
   duration: { type: String, required: true }, // e.g., "4 Years", "3 Years"
   totalSemesters: { type: Number, required: true },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true },
