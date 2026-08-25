@@ -203,15 +203,14 @@ exports.getSemesterById = async (req, res) => {
 
 exports.createSemester = async (req, res) => {
   try {
-    const { semesterNumber, courseName, startDate, status } = req.body;
+    const { semesterNumber, startDate, status } = req.body;
     
-    if (!semesterNumber || !courseName || !startDate) {
+    if (!semesterNumber || !startDate) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
     const semester = await Semester.create({
       semesterNumber,
-      courseName,
       startDate,
       status: status || 'Upcoming',
       collegeId: req.college._id
@@ -225,7 +224,7 @@ exports.createSemester = async (req, res) => {
 
 exports.updateSemester = async (req, res) => {
   try {
-    const { semesterNumber, courseName, startDate, status } = req.body;
+    const { semesterNumber, startDate, status } = req.body;
     
     let semester = await Semester.findOne({
       _id: req.params.id,
@@ -235,7 +234,6 @@ exports.updateSemester = async (req, res) => {
     if (!semester) return res.status(404).json({ message: 'Semester not found' });
 
     if (semesterNumber) semester.semesterNumber = semesterNumber;
-    if (courseName) semester.courseName = courseName;
     if (startDate) semester.startDate = startDate;
     if (status) semester.status = status;
 
@@ -475,42 +473,71 @@ exports.createAllocation = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    // Fetch names to store in document for easy frontend display
+    // Ensure inputs are arrays for Cartesian product processing
+    const courses = Array.isArray(course) ? course : [course];
+    const semesters = Array.isArray(semester) ? semester : [semester];
+    const subjects = Array.isArray(subject) ? subject : [subject];
+
+    if (courses.length === 0 || semesters.length === 0 || subjects.length === 0) {
+       return res.status(400).json({ message: 'Selection arrays cannot be empty' });
+    }
+
     const teacherDoc = await Teacher.findOne({ _id: teacher, collegeId: req.college._id });
-    const courseDoc = await Course.findOne({ _id: course, collegeId: req.college._id });
-    const subjectDoc = await Subject.findOne({ _id: subject, collegeId: req.college._id });
-
-    if (!teacherDoc || !courseDoc || !subjectDoc) {
-      return res.status(404).json({ message: 'Invalid teacher, course, or subject reference' });
+    if (!teacherDoc) {
+      return res.status(404).json({ message: 'Teacher not found' });
     }
 
-    const allocationExists = await SubjectAllocation.findOne({
-      teacher,
-      course,
-      semester,
-      subject,
-      collegeId: req.college._id
-    });
+    const createdAllocations = [];
+    const errors = [];
 
-    if (allocationExists) {
-      return res.status(400).json({ message: 'This subject is already allocated to this teacher for the selected semester and branch' });
+    for (const crs of courses) {
+      const courseDoc = await Course.findOne({ _id: crs, collegeId: req.college._id });
+      if (!courseDoc) {
+        errors.push(`Course ID ${crs} not found`);
+        continue;
+      }
+
+      for (const sem of semesters) {
+        for (const sub of subjects) {
+          const subjectDoc = await Subject.findOne({ _id: sub, collegeId: req.college._id });
+          if (!subjectDoc) {
+            errors.push(`Subject ID ${sub} not found`);
+            continue;
+          }
+
+          const allocationExists = await SubjectAllocation.findOne({
+            teacher,
+            course: crs,
+            semester: sem,
+            subject: sub,
+            collegeId: req.college._id
+          });
+
+          if (!allocationExists) {
+            const allocation = await SubjectAllocation.create({
+              teacher,
+              teacherName: teacherDoc.name,
+              course: crs,
+              courseName: courseDoc.name,
+              department: courseDoc.department,
+              semester: sem,
+              subject: sub,
+              subjectName: subjectDoc.name,
+              subjectCode: subjectDoc.code,
+              status: status || 'Active',
+              collegeId: req.college._id
+            });
+            createdAllocations.push(allocation);
+          }
+        }
+      }
     }
 
-    const allocation = await SubjectAllocation.create({
-      teacher,
-      teacherName: teacherDoc.name,
-      course,
-      courseName: courseDoc.name,
-      department: courseDoc.department,
-      semester,
-      subject,
-      subjectName: subjectDoc.name,
-      subjectCode: subjectDoc.code,
-      status: status || 'Active',
-      collegeId: req.college._id
+    res.status(201).json({ 
+      message: `${createdAllocations.length} allocations created successfully`, 
+      createdCount: createdAllocations.length,
+      errors
     });
-
-    res.status(201).json({ message: 'Subject allocated successfully', allocation });
   } catch (error) {
     res.status(500).json({ message: 'Error allocating subject', error: error.message });
   }
