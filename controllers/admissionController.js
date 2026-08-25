@@ -97,14 +97,33 @@ exports.createAdmission = async (req, res) => {
       return res.status(400).json({ message: 'Application number already exists' });
     }
 
-    // Initialize default documents based on stage
-    const finalDocuments = documents && documents.length > 0 ? documents : [
+    const defaultDocs = [
       { name: 'Photograph', status: 'Not Uploaded' },
-      { name: 'Aadhaar Card', status: 'Not Uploaded' },
+      { name: 'Adhar Front Side', status: 'Not Uploaded' },
+      { name: 'Adhar Back Side', status: 'Not Uploaded' },
       { name: '10th Marksheet', status: 'Not Uploaded' },
       { name: 'Transfer Certificate', status: 'Not Uploaded' },
       { name: 'Character Certificate', status: 'Not Uploaded' }
     ];
+
+    let finalDocuments = [...defaultDocs];
+    if (documents && Array.isArray(documents) && documents.length > 0) {
+      finalDocuments = defaultDocs.map(defDoc => {
+        const searchName = defDoc.name === 'Photograph' ? 'Student Photo' : defDoc.name;
+        const uploaded = documents.find(d => d.name === searchName);
+        if (uploaded) {
+          return { name: defDoc.name, url: uploaded.url, status: uploaded.status || 'Pending' };
+        }
+        return defDoc;
+      });
+
+      documents.forEach(doc => {
+        const isDefault = defaultDocs.some(d => d.name === doc.name || (d.name === 'Photograph' && doc.name === 'Student Photo'));
+        if (!isDefault) {
+          finalDocuments.push({ name: doc.name, url: doc.url, status: doc.status || 'Pending' });
+        }
+      });
+    }
 
     // Create admission
     const admission = new Admission({
@@ -153,18 +172,51 @@ exports.createPublicAdmission = async (req, res) => {
 
     // Generate Application Number dynamically
     const year = new Date().getFullYear();
-    const count = await Admission.countDocuments({ collegeId });
-    const padded = (count + 1).toString().padStart(4, '0');
+    const lastAdmission = await Admission.findOne({ collegeId, appNo: new RegExp(`^APP/${year}/`) }).sort({ createdAt: -1 });
+    
+    let nextNum = 1;
+    if (lastAdmission && lastAdmission.appNo) {
+      const parts = lastAdmission.appNo.split('/');
+      if (parts.length === 3) {
+        const lastVal = parseInt(parts[2], 10);
+        if (!isNaN(lastVal)) {
+          nextNum = lastVal + 1;
+        }
+      }
+    }
+    
+    const padded = nextNum.toString().padStart(4, '0');
     const appNo = `APP/${year}/${padded}`;
 
-    // Initialize default documents based on stage
-    const finalDocuments = documents && documents.length > 0 ? documents : [
+    const defaultDocs = [
       { name: 'Photograph', status: 'Not Uploaded' },
-      { name: 'Aadhaar Card', status: 'Not Uploaded' },
+      { name: 'Adhar Front Side', status: 'Not Uploaded' },
+      { name: 'Adhar Back Side', status: 'Not Uploaded' },
       { name: '10th Marksheet', status: 'Not Uploaded' },
       { name: 'Transfer Certificate', status: 'Not Uploaded' },
       { name: 'Character Certificate', status: 'Not Uploaded' }
     ];
+
+    let finalDocuments = [...defaultDocs];
+    if (documents && Array.isArray(documents) && documents.length > 0) {
+      finalDocuments = defaultDocs.map(defDoc => {
+        // Handle name mapping if frontend uses 'Student Photo' instead of 'Photograph'
+        const searchName = defDoc.name === 'Photograph' ? 'Student Photo' : defDoc.name;
+        const uploaded = documents.find(d => d.name === searchName);
+        if (uploaded) {
+          return { name: defDoc.name, url: uploaded.url, status: uploaded.status || 'Pending' };
+        }
+        return defDoc;
+      });
+
+      // Add any extra documents uploaded that are not in default list
+      documents.forEach(doc => {
+        const isDefault = defaultDocs.some(d => d.name === doc.name || (d.name === 'Photograph' && doc.name === 'Student Photo'));
+        if (!isDefault) {
+          finalDocuments.push({ name: doc.name, url: doc.url, status: doc.status || 'Pending' });
+        }
+      });
+    }
 
     // Create admission
     const admission = new Admission({
@@ -318,11 +370,20 @@ exports.registerStudent = async (req, res) => {
 
     // Auto-generate IDs if not provided
     const year = new Date().getFullYear();
-    const count = await Admission.countDocuments({ 
+    
+    const lastRegistered = await Admission.findOne({ 
       collegeId: req.college._id, 
       registrationStatus: 'Registered' 
-    });
-    const padded = (count + 1).toString().padStart(3, '0');
+    }).sort({ createdAt: -1 });
+
+    let nextNum = 1;
+    if (lastRegistered && lastRegistered.rollNo) {
+      const lastVal = parseInt(lastRegistered.rollNo, 10);
+      if (!isNaN(lastVal)) {
+        nextNum = lastVal + 1;
+      }
+    }
+    const padded = nextNum.toString().padStart(3, '0');
 
     admission.enrollNo = enrollNo || `ENR/${year}/${padded}`;
     admission.studentId = studentId || `STU${year}${padded}`;
@@ -457,9 +518,11 @@ exports.getPublicFormOptions = async (req, res) => {
     const { collegeId } = req.params;
     const Course = require('../models/Course');
     const College = require('../models/College');
+    const Department = require('../models/Department');
     const college = await College.findById(collegeId);
 
     const branches = await Course.find({ collegeId, status: 'Active' }).select('name department -_id');
+    const departments = await Department.find({ collegeId }).select('name -_id');
     
     const currentYear = new Date().getFullYear();
     const sessions = [];
@@ -472,7 +535,7 @@ exports.getPublicFormOptions = async (req, res) => {
       branches: branches.map(b => b.name),
       sessions,
       years: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-      courses: ['B.Tech', 'M.Tech', 'Diploma', 'BCA', 'MCA', 'BBA', 'MBA', 'B.Sc', 'M.Sc'] // Common courses
+      courses: departments.length > 0 ? departments.map(d => d.name) : ['B.Tech', 'M.Tech', 'Diploma', 'BCA', 'MCA', 'BBA', 'MBA', 'B.Sc', 'M.Sc']
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching form options', error: error.message });
