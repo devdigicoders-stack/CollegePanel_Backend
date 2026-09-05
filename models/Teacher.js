@@ -40,7 +40,7 @@ const teacherSchema = new mongoose.Schema({
   },
   dateOfJoining: { 
     type: Date, 
-    required: true 
+    default: Date.now 
   },
   qualification: { 
     type: String 

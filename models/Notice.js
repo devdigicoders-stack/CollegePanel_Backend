@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
 
 const noticeSchema = new mongoose.Schema({
-  noticeId: { type: String, required: true, unique: true },
+  noticeId: { type: String, required: true },
   title: { type: String, required: true },
   targetAudience: { type: String, enum: ['All Students', 'All Staff', 'All Parents', 'Specific Department', 'Specific Course', 'Hostel Residents'], required: true },
-  postedBy: { type: String, required: true },
+  postedBy: { type: String, default: 'College Admin' },
   postedById: { type: mongoose.Schema.Types.ObjectId, refPath: 'postedByRole' },
-  postedByRole: { type: String, required: true },
+  postedByRole: { type: String, default: 'College Admin' },
   department: { type: String },
-  dateOfPublishing: { type: Date, required: true },
+  dateOfPublishing: { type: Date, default: Date.now },
   details: { type: String, required: true },
   status: { type: String, enum: ['Published', 'Draft'], default: 'Published' },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true },
@@ -16,5 +16,7 @@ const noticeSchema = new mongoose.Schema({
   images: [{ type: String }],
   link: { type: String }
 }, { timestamps: true });
+
+noticeSchema.index({ noticeId: 1, collegeId: 1 });
 
 module.exports = mongoose.model('Notice', noticeSchema);

@@ -4,6 +4,7 @@ const studyMaterialSchema = new mongoose.Schema({
   title: { type: String, required: true },
   subject: { type: String, required: true },
   course: { type: String, required: true },
+  branch: { type: String }, // Branch name
   type: { type: String, required: true }, // e.g., 'PDF', 'Video', 'PPT'
   size: { type: String, default: 'Unknown' },
   fileUrl: { type: String, required: true }, // URL or path to download

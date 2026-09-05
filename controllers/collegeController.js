@@ -8,6 +8,86 @@ const Notice = require('../models/Notice');
 const Student = require('../models/Student');
 const Admission = require('../models/Admission');
 const Lead = require('../models/Lead');
+const Course = require('../models/Course');
+const Semester = require('../models/Semester');
+const Subject = require('../models/Subject');
+const Designation = require('../models/Designation');
+
+// Helper to assign master academics to a college
+const assignMasterAcademics = async (collegeId, academicsData) => {
+  if (!academicsData) return;
+  
+  try {
+    const data = typeof academicsData === 'string' ? JSON.parse(academicsData) : academicsData;
+    
+    if (data.courses && data.courses.length > 0) {
+      const masters = await Course.find({ _id: { $in: data.courses } });
+      for (const m of masters) {
+        const exists = await Course.findOne({ code: m.code, collegeId });
+        if (!exists) {
+          const copy = m.toObject();
+          delete copy._id; delete copy.createdAt; delete copy.updatedAt;
+          copy.collegeId = collegeId;
+          await Course.create(copy);
+        }
+      }
+    }
+
+    if (data.departments && data.departments.length > 0) {
+      const masters = await Department.find({ _id: { $in: data.departments } });
+      for (const m of masters) {
+        const exists = await Department.findOne({ name: m.name, collegeId });
+        if (!exists) {
+          const copy = m.toObject();
+          delete copy._id; delete copy.createdAt; delete copy.updatedAt;
+          copy.collegeId = collegeId;
+          await Department.create(copy);
+        }
+      }
+    }
+
+    if (data.semesters && data.semesters.length > 0) {
+      const masters = await Semester.find({ _id: { $in: data.semesters } });
+      for (const m of masters) {
+        const exists = await Semester.findOne({ semesterNumber: m.semesterNumber, collegeId });
+        if (!exists) {
+          const copy = m.toObject();
+          delete copy._id; delete copy.createdAt; delete copy.updatedAt;
+          copy.collegeId = collegeId;
+          await Semester.create(copy);
+        }
+      }
+    }
+
+    if (data.subjects && data.subjects.length > 0) {
+      const masters = await Subject.find({ _id: { $in: data.subjects } });
+      for (const m of masters) {
+        const exists = await Subject.findOne({ code: m.code, collegeId });
+        if (!exists) {
+          const copy = m.toObject();
+          delete copy._id; delete copy.createdAt; delete copy.updatedAt;
+          copy.collegeId = collegeId;
+          await Subject.create(copy);
+        }
+      }
+    }
+
+    if (data.designations && data.designations.length > 0) {
+      const masters = await Designation.find({ _id: { $in: data.designations } });
+      for (const m of masters) {
+        const exists = await Designation.findOne({ name: m.name, collegeId });
+        if (!exists) {
+          const copy = m.toObject();
+          delete copy._id; delete copy.createdAt; delete copy.updatedAt;
+          copy.collegeId = collegeId;
+          await Designation.create(copy);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error assigning academics:", error);
+  }
+};
 
 // @desc    Create a new college
 // @route   POST /api/colleges
@@ -99,6 +179,10 @@ exports.createCollege = async (req, res) => {
         radius: radius ? Number(radius) : 50
       }
     });
+
+    if (req.body.academics) {
+      await assignMasterAcademics(college._id, req.body.academics);
+    }
 
     if (college) {
       res.status(201).json({
@@ -306,6 +390,10 @@ exports.updateCollege = async (req, res) => {
     }
 
     const updatedCollege = await college.save();
+
+    if (req.body.academics) {
+      await assignMasterAcademics(college._id, req.body.academics);
+    }
 
     res.json({
       message: 'College updated successfully',

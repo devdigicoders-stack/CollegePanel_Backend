@@ -117,8 +117,8 @@ exports.createCourse = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    const courseExists = await Course.findOne({ code });
-    if (courseExists) return res.status(400).json({ message: 'Branch code already exists' });
+    const courseExists = await Course.findOne({ code, collegeId: req.college._id });
+    if (courseExists) return res.status(400).json({ message: 'Branch code already exists for this college' });
 
     const course = await Course.create({
       code,
@@ -290,8 +290,8 @@ exports.createSubject = async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    const subjectExists = await Subject.findOne({ code });
-    if (subjectExists) return res.status(400).json({ message: 'Subject code already exists' });
+    const subjectExists = await Subject.findOne({ code, collegeId: req.college._id });
+    if (subjectExists) return res.status(400).json({ message: 'Subject code already exists for this college' });
 
     const subject = await Subject.create({
       code,

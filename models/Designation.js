@@ -4,7 +4,7 @@ const designationSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String },
   level: { type: String },
-  collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true },
+  collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: false }, // Optional for Master designations
   status: { type: String, default: 'Active', enum: ['Active', 'Inactive'] }
 }, { timestamps: true });
 

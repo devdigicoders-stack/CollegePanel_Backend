@@ -508,7 +508,7 @@ exports.submitComplaint = async (req, res) => {
 exports.createAssignment = async (req, res) => {
   try {
     const { classId } = req.params;
-    const { title, description, dueDate, totalMarks } = req.body;
+    const { title, description, dueDate, totalMarks, fileUrl, fileName } = req.body;
 
     const allocation = await SubjectAllocation.findById(classId);
     if (!allocation) return res.status(404).json({ message: 'Class not found' });
@@ -518,10 +518,13 @@ exports.createAssignment = async (req, res) => {
       title,
       description,
       course: allocation.courseName,
+      branch: allocation.courseName,
       department: allocation.department,
       subject: allocation.subjectName,
       semester: allocation.semester,
       section: 'A', // Assuming section A by default
+      fileUrl: fileUrl || '',
+      fileName: fileName || '',
       assignedDate: new Date(),
       dueDate,
       totalMarks,

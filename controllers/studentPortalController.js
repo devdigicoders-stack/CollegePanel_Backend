@@ -61,6 +61,60 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
+// Helper to build student assignment filter
+const buildStudentAssignmentQuery = (student, collegeId) => {
+  const query = { collegeId, $and: [] };
+
+  // 1. Semester matching
+  let allowedSemesters = [];
+  if (student.semester) {
+    const sClean = student.semester.toString().replace(/[^0-9]/g, '');
+    allowedSemesters = [student.semester, `Sem ${sClean}`, sClean];
+  } else if (student.year) {
+    const yearStr = student.year.replace(' Year', '');
+    const yearToSemesters = {
+      '1st': ['1', '2', 'Sem 1', 'Sem 2'],
+      '2nd': ['3', '4', 'Sem 3', 'Sem 4'],
+      '3rd': ['5', '6', 'Sem 5', 'Sem 6'],
+      '4th': ['7', '8', 'Sem 7', 'Sem 8']
+    };
+    allowedSemesters = yearToSemesters[yearStr] || [];
+  }
+
+  if (allowedSemesters.length > 0) {
+    query.$and.push({ semester: { $in: allowedSemesters } });
+  }
+
+  // 2. Branch matching
+  const branchOr = [];
+  if (student.branch) {
+    branchOr.push({ branch: new RegExp(student.branch, 'i') });
+    branchOr.push({ course: new RegExp(student.branch, 'i') });
+    branchOr.push({ department: new RegExp(student.branch, 'i') });
+  }
+  if (student.course && student.course !== student.branch) {
+    branchOr.push({ course: new RegExp(student.course, 'i') });
+    branchOr.push({ branch: new RegExp(student.course, 'i') });
+  }
+  if (branchOr.length > 0) {
+    query.$and.push({ $or: branchOr });
+  }
+
+  // 3. Section matching (only assignments matching student's section or generic 'All')
+  const studentSec = student.section || 'A';
+  query.$and.push({
+    $or: [
+      { section: studentSec },
+      { section: 'All' },
+      { section: '' },
+      { section: { $exists: false } }
+    ]
+  });
+
+  if (query.$and.length === 0) delete query.$and;
+  return query;
+};
+
 // Dashboard Stats
 exports.getDashboardStats = async (req, res) => {
   try {
@@ -70,38 +124,16 @@ exports.getDashboardStats = async (req, res) => {
     const Admission = require('../models/Admission');
     const isApplicant = await Admission.exists({ _id: studentId, collegeId });
     
-    // Always calculate totalAssignments based on available info
-    const yearStr = req.student.year ? req.student.year.replace(' Year', '') : '';
-    const yearToSemesters = {
-      '1st': ['1', '2', 'Sem 1', 'Sem 2'],
-      '2nd': ['3', '4', 'Sem 3', 'Sem 4'],
-      '3rd': ['5', '6', 'Sem 5', 'Sem 6'],
-      '4th': ['7', '8', 'Sem 7', 'Sem 8']
-    };
-    const semesters = yearToSemesters[yearStr] || [];
-
-    const baseQuery = {
-      collegeId,
-      semester: { $in: semesters },
-      $or: []
-    };
-    
-    if (req.student.course) {
-      baseQuery.$or.push({ course: new RegExp(req.student.course, 'i') });
-    }
-    if (req.student.branch) {
-      baseQuery.$or.push({ department: new RegExp(req.student.branch, 'i') });
-      baseQuery.$or.push({ course: new RegExp(req.student.branch, 'i') }); // Fallback for older assignments
-    }
-    
-    if (baseQuery.$or.length === 0) delete baseQuery.$or;
-    
+    const baseQuery = buildStudentAssignmentQuery(req.student, collegeId);
     const totalAssignments = await Assignment.countDocuments(baseQuery);
     
     const StudyMaterial = require('../models/StudyMaterial');
     const materialQueryOr = [];
     if (req.student.course) materialQueryOr.push({ course: new RegExp(req.student.course, 'i') });
-    if (req.student.branch) materialQueryOr.push({ course: new RegExp(req.student.branch, 'i') });
+    if (req.student.branch) {
+      materialQueryOr.push({ course: new RegExp(req.student.branch, 'i') });
+      materialQueryOr.push({ branch: new RegExp(req.student.branch, 'i') });
+    }
     
     const totalMaterials = materialQueryOr.length > 0 ? await StudyMaterial.countDocuments({
       collegeId,
@@ -124,7 +156,6 @@ exports.getDashboardStats = async (req, res) => {
       });
     }
 
-
     // Pending Assignments
     const submissions = await AssignmentSubmission.find({ studentId, collegeId }).select('assignmentId');
     const submittedIds = submissions.map(s => s.assignmentId.toString());
@@ -132,7 +163,6 @@ exports.getDashboardStats = async (req, res) => {
       ...baseQuery,
       _id: { $nin: submittedIds }
     });
-
 
     const attendancePercentage = 0;
     const total = 0;
@@ -152,50 +182,31 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-
 // Get assignments
 exports.getAssignments = async (req, res) => {
   try {
-    const yearStr = req.student.year ? req.student.year.replace(' Year', '') : '';
-    const yearToSemesters = {
-      '1st': ['1', '2', 'Sem 1', 'Sem 2'],
-      '2nd': ['3', '4', 'Sem 3', 'Sem 4'],
-      '3rd': ['5', '6', 'Sem 5', 'Sem 6'],
-      '4th': ['7', '8', 'Sem 7', 'Sem 8']
-    };
-    const semesters = yearToSemesters[yearStr] || [];
-    
-    const baseQuery = {
-      collegeId: req.college._id,
-      semester: { $in: semesters },
-      $or: []
-    };
-    
-    if (req.student.course) {
-      baseQuery.$or.push({ course: new RegExp(req.student.course, 'i') });
-    }
-    if (req.student.branch) {
-      baseQuery.$or.push({ department: new RegExp(req.student.branch, 'i') });
-      baseQuery.$or.push({ course: new RegExp(req.student.branch, 'i') }); // Fallback for older assignments
-    }
-    
-    if (baseQuery.$or.length === 0) delete baseQuery.$or;
+    const collegeId = req.college._id;
+    const baseQuery = buildStudentAssignmentQuery(req.student, collegeId);
 
-    // Only get assignments for student's course/branch/sem
+    // Only get assignments for student's course/branch/sem/section
     const assignments = await Assignment.find(baseQuery)
       .populate('teacherId', 'name')
       .sort({ dueDate: 1 });
       
     // Fetch submissions for this student
-    const submissions = await AssignmentSubmission.find({ studentId: req.student._id, collegeId: req.college._id });
+    const submissions = await AssignmentSubmission.find({ studentId: req.student._id, collegeId });
     
     // Combine them
     const result = assignments.map(a => {
       const sub = submissions.find(s => s.assignmentId.toString() === a._id.toString());
       return {
         ...a.toObject(),
+        fileUrl: a.fileUrl || '',
+        fileName: a.fileName || '',
         submissionStatus: sub ? sub.status : 'Pending',
-        submissionDate: sub ? sub.createdAt : null,
+        submissionDate: sub ? (sub.submissionDate || sub.createdAt) : null,
+        submittedFileUrl: sub ? sub.fileUrl : null,
+        studentRemarks: sub ? sub.remarks : null,
         marksAwarded: sub ? sub.grade : null
       };
     });

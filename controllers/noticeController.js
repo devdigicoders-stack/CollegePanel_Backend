@@ -32,9 +32,21 @@ exports.getNotices = async (req, res) => {
 exports.createNotice = async (req, res) => {
   try {
     const { noticeId, title, targetAudience, postedBy, postedByRole, department, dateOfPublishing, details, status, link } = req.body;
-    const existing = await Notice.findOne({ noticeId });
+
+    const resolvedPostedBy = (postedBy && postedBy.trim()) ||
+      (req.employee?.name || req.teacher?.name || req.college?.adminName || req.college?.collegeName || req.superAdmin?.name || 'College Admin');
+    
+    const resolvedPostedByRole = (postedByRole && postedByRole.trim()) ||
+      (req.employee?.role || (req.teacher ? (req.teacher.designation || 'Teacher') : (req.userRole === 'college_admin' ? 'College Admin' : (req.userRole === 'Teacher Role' ? 'Teacher' : (req.userRole || 'College Admin')))));
+
+    const resolvedPostedById = req.employee?._id || req.teacher?._id || req.college?._id || req.superAdmin?._id || null;
+    
+    const resolvedDateOfPublishing = dateOfPublishing ? new Date(dateOfPublishing) : new Date();
+
+    let finalNoticeId = (noticeId && noticeId.trim()) || `NOT-${Date.now().toString().slice(-6)}`;
+    const existing = await Notice.findOne({ noticeId: finalNoticeId, collegeId: req.college._id });
     if (existing) {
-      return res.status(400).json({ message: 'Notice ID already exists' });
+      finalNoticeId = `NOT-${Date.now().toString().slice(-6)}${Math.floor(10 + Math.random() * 90)}`;
     }
     
     let pdfs = [];
@@ -49,9 +61,17 @@ exports.createNotice = async (req, res) => {
     }
     
     const payload = {
-      noticeId, title, targetAudience, postedBy, postedByRole, department,
-      dateOfPublishing, details, link,
-      status: status || 'Draft',
+      noticeId: finalNoticeId,
+      title,
+      targetAudience: targetAudience || 'All Students',
+      postedBy: resolvedPostedBy,
+      postedById: resolvedPostedById,
+      postedByRole: resolvedPostedByRole,
+      department,
+      dateOfPublishing: resolvedDateOfPublishing,
+      details,
+      link,
+      status: status || 'Published',
       pdfs,
       images,
       collegeId: req.college._id

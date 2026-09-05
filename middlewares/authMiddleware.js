@@ -120,6 +120,9 @@ const collegeProtect = async (req, res, next) => {
              username: applicant.appNo,
              branch: applicant.branch,
              course: applicant.course,
+             semester: applicant.semester,
+             section: applicant.section,
+             year: applicant.year,
              collegeId: applicant.collegeId,
              isApplicant: true
           };

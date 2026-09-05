@@ -13,6 +13,8 @@ const studentSchema = new mongoose.Schema({
   emergencyContact: { type: String, default: '' },
   branch: { type: String, default: 'Computer Science' },
   year: { type: String, default: '1st Year' },
+  semester: { type: String, default: 'Sem 1' },
+  section: { type: String, default: 'A' },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true },
   course: { type: String, required: true },
   session: { type: String, default: '' },

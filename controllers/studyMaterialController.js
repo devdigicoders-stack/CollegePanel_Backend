@@ -11,16 +11,18 @@ exports.getMaterials = async (req, res) => {
 
 exports.createMaterial = async (req, res) => {
   try {
-    const { title, subject, course, type, size, fileUrl } = req.body;
+    const { title, subject, course, branch, type, size, fileUrl } = req.body;
+    const branchVal = branch || course;
     
-    if (!title || !subject || !course || !type || !fileUrl) {
+    if (!title || !subject || !branchVal || !type || !fileUrl) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
     const material = new StudyMaterial({
       title,
       subject,
-      course,
+      course: branchVal,
+      branch: branchVal,
       type,
       size: size || 'Unknown',
       fileUrl,

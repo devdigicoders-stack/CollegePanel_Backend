@@ -38,6 +38,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Routes
 const indexRoutes = require('./routes/index');
 const superAdminRoutes = require('./routes/superAdminRoutes');
+const superAdminAcademicsRoutes = require('./routes/superAdminAcademicsRoutes');
 const collegeRoutes = require('./routes/collegeRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const collegeAdminAuthRoutes = require('./routes/collegeAdminAuthRoutes');
@@ -65,6 +66,7 @@ const studyMaterialRoutes = require('./routes/studyMaterialRoutes');
 
 app.use('/api', indexRoutes);
 app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/superadmin/academics', superAdminAcademicsRoutes);
 app.use('/api/colleges', collegeRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/college-admin', collegeAdminAuthRoutes);

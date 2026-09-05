@@ -103,7 +103,7 @@ exports.createTeacher = async (req, res) => {
     const { name, email, mobile, department, designation, dateOfBirth, gender, dateOfJoining, qualification, experience, payScale, status } = req.body;
 
     // Validation
-    if (!name || !email || !mobile || !department || !designation || !dateOfJoining) {
+    if (!name || !email || !mobile || !department || !designation) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
@@ -129,7 +129,7 @@ exports.createTeacher = async (req, res) => {
       designation,
       dateOfBirth,
       gender,
-      dateOfJoining,
+      dateOfJoining: dateOfJoining || new Date(),
       qualification,
       experience,
       payScale,

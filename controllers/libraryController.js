@@ -98,7 +98,7 @@ exports.getStats = getStats;
 // --- Books Management ---
 exports.getBooks = async (req, res) => {
   try {
-    const { search, category, status, page = 1, limit = 10 } = req.query;
+    const { search, category, status, stockFilter, page = 1, limit = 10 } = req.query;
     let query = { collegeId: req.college._id };
 
     if (search) {
@@ -111,12 +111,90 @@ exports.getBooks = async (req, res) => {
     if (category && category !== 'All') query.category = category;
     if (status && status !== 'All') query.status = status;
 
+    // Apply stock/inventory vs issued filter
+    if (stockFilter === 'inventory' || stockFilter === 'available') {
+      query.availableCopies = { $gt: 0 };
+      query.status = { $nin: ['Lost', 'Damaged'] };
+    } else if (stockFilter === 'issued') {
+      query.$expr = { $gt: [{ $subtract: ['$totalCopies', '$availableCopies'] }, 0] };
+    } else if (stockFilter === 'out_of_stock') {
+      query.availableCopies = { $lte: 0 };
+    } else if (stockFilter === 'lost_damaged') {
+      query.status = { $in: ['Lost', 'Damaged'] };
+    }
+
     const skip = (page - 1) * limit;
     const books = await LibraryBook.find(query).skip(skip).limit(Number(limit)).sort({ createdAt: -1 });
     const total = await LibraryBook.countDocuments(query);
 
+    // Live counts for tabs/badges under current search & category
+    const baseCountQuery = { collegeId: req.college._id };
+    if (category && category !== 'All') baseCountQuery.category = category;
+    if (search) {
+      baseCountQuery.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { author: { $regex: search, $options: 'i' } },
+        { accessionNo: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [allCount, inventoryCount, issuedCount, outOfStockCount] = await Promise.all([
+      LibraryBook.countDocuments(baseCountQuery),
+      LibraryBook.countDocuments({
+        ...baseCountQuery,
+        availableCopies: { $gt: 0 },
+        status: { $nin: ['Lost', 'Damaged'] }
+      }),
+      LibraryBook.countDocuments({
+        ...baseCountQuery,
+        $expr: { $gt: [{ $subtract: ['$totalCopies', '$availableCopies'] }, 0] }
+      }),
+      LibraryBook.countDocuments({
+        ...baseCountQuery,
+        availableCopies: { $lte: 0 }
+      })
+    ]);
+
+    // Attach active issue details for each book
+    const bookIds = books.map(b => b._id);
+    const activeTransactions = await LibraryTransaction.find({
+      bookId: { $in: bookIds },
+      status: { $in: ['Issued', 'Renewed', 'Overdue'] },
+      collegeId: req.college._id
+    }).populate('studentId', 'studentName firstName lastName studentId enrollmentNo rollNumber branch');
+
+    const transactionsByBook = {};
+    activeTransactions.forEach(txn => {
+      const bId = txn.bookId.toString();
+      if (!transactionsByBook[bId]) transactionsByBook[bId] = [];
+      transactionsByBook[bId].push({
+        _id: txn._id,
+        transactionId: txn.transactionId,
+        memberName: txn.memberName || (txn.studentId ? (txn.studentId.studentName || `${txn.studentId.firstName || ''} ${txn.studentId.lastName || ''}`.trim()) : 'Student'),
+        memberType: txn.memberType,
+        enrollmentNo: txn.studentId?.studentId || txn.studentId?.enrollmentNo || txn.studentId?.rollNumber || 'N/A',
+        issueDate: txn.issueDate,
+        dueDate: txn.dueDate,
+        status: txn.status
+      });
+    });
+
+    const enhancedBooks = books.map(b => {
+      const bObj = b.toObject();
+      const issued = (b.totalCopies || 0) - (b.availableCopies || 0);
+      bObj.issuedCopies = issued > 0 ? issued : 0;
+      bObj.activeIssues = transactionsByBook[b._id.toString()] || [];
+      return bObj;
+    });
+
     res.status(200).json({
-      books,
+      books: enhancedBooks,
+      counts: {
+        all: allCount,
+        inventory: inventoryCount,
+        issued: issuedCount,
+        outOfStock: outOfStockCount
+      },
       pagination: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / limit) }
     });
   } catch (error) {

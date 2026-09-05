@@ -9,19 +9,34 @@ const collegeFilter = (req) => ({ collegeId: req.college._id });
 
 exports.getAssignments = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, department, subject, search } = req.query;
+    const { page = 1, limit = 10, status, department, branch, subject, search } = req.query;
     const filter = collegeFilter(req);
     if (status && status !== 'All') filter.status = status;
-    if (department && department !== 'All Departments') filter.course = department;
+    
+    const branchFilter = (branch && branch !== 'All Branches') ? branch : (department && department !== 'All Departments' ? department : null);
+    if (branchFilter) {
+      filter.$or = [
+        { course: new RegExp(branchFilter, 'i') },
+        { branch: new RegExp(branchFilter, 'i') },
+        { department: new RegExp(branchFilter, 'i') }
+      ];
+    }
     if (subject && subject !== 'All Subjects') filter.subject = subject;
     if (search && search !== '') {
-      filter.$or = [
+      const searchConditions = [
         { title: { $regex: search, $options: 'i' } },
         { subject: { $regex: search, $options: 'i' } },
         { assignmentId: { $regex: search, $options: 'i' } },
         { teacherName: { $regex: search, $options: 'i' } },
-        { course: { $regex: search, $options: 'i' } }
+        { course: { $regex: search, $options: 'i' } },
+        { branch: { $regex: search, $options: 'i' } }
       ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchConditions }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchConditions;
+      }
     }
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const data = await Assignment.find(filter)
@@ -38,26 +53,48 @@ exports.getAssignments = async (req, res) => {
 
 exports.createAssignment = async (req, res) => {
   try {
-    const { assignmentId, title, description, course, subject, semester, section, assignedDate, dueDate, totalMarks, teacherId, teacherName } = req.body;
-    const existing = await Assignment.findOne({ assignmentId });
-    if (existing) {
-      return res.status(400).json({ message: 'Assignment ID already exists' });
+    let { assignmentId, title, description, course, branch, department, subject, semester, section, assignedDate, dueDate, totalMarks, teacherId, teacherName, fileUrl, fileName } = req.body;
+    
+    // Auto-generate assignmentId if not supplied
+    if (!assignmentId || assignmentId.trim() === '') {
+      assignmentId = `ASN-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     }
+    
+    // Check if duplicate for this college
+    const existing = await Assignment.findOne({ assignmentId, collegeId: req.college._id });
+    if (existing) {
+      assignmentId = `ASN-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+    }
+
+    const branchVal = branch || course || department || '';
+
     const Student = require('../models/Student');
     const totalStudents = await Student.countDocuments({
       collegeId: req.college._id,
       status: 'Active',
       $or: [
-        { course: course },
-        { branch: course }
+        { course: new RegExp(branchVal, 'i') },
+        { branch: new RegExp(branchVal, 'i') }
       ]
     });
 
     const payload = {
-      assignmentId, title, description, course, subject, semester, section,
+      assignmentId,
+      title,
+      description,
+      course: branchVal,
+      branch: branchVal,
+      department: branchVal,
+      subject,
+      semester: semester || 'Sem 1',
+      section: section || 'A',
+      fileUrl: fileUrl || '',
+      fileName: fileName || '',
       assignedDate: assignedDate || new Date(),
-      dueDate, totalMarks,
-      teacherId, teacherName,
+      dueDate,
+      totalMarks: Number(totalMarks) || 25,
+      teacherId: teacherId || null,
+      teacherName: teacherName || (req.teacher ? req.teacher.name : 'Admin'),
       status: 'Pending',
       totalStudents,
       submittedCount: 0,
@@ -82,9 +119,17 @@ exports.getAssignmentById = async (req, res) => {
 
 exports.updateAssignment = async (req, res) => {
   try {
+    const updateData = { ...req.body };
+    const branchVal = updateData.branch || updateData.course || updateData.department;
+    if (branchVal) {
+      updateData.branch = branchVal;
+      updateData.course = branchVal;
+      updateData.department = branchVal;
+    }
+
     const assignment = await Assignment.findOneAndUpdate(
       { _id: req.params.id, ...collegeFilter(req) },
-      req.body,
+      updateData,
       { returnDocument: 'after', runValidators: true }
     ).select('-__v');
     if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
@@ -178,9 +223,16 @@ exports.updateSubmission = async (req, res) => {
 
 exports.getAssignmentStats = async (req, res) => {
   try {
-    const { department, subject } = req.query;
+    const { department, branch, subject } = req.query;
     const filter = collegeFilter(req);
-    if (department && department !== 'All Departments') filter.course = department;
+    const branchFilter = (branch && branch !== 'All Branches') ? branch : (department && department !== 'All Departments' ? department : null);
+    if (branchFilter) {
+      filter.$or = [
+        { course: new RegExp(branchFilter, 'i') },
+        { branch: new RegExp(branchFilter, 'i') },
+        { department: new RegExp(branchFilter, 'i') }
+      ];
+    }
     if (subject && subject !== 'All Subjects') filter.subject = subject;
 
     const total = await Assignment.countDocuments(filter);
