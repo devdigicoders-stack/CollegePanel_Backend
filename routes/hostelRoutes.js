@@ -18,12 +18,17 @@ router.get('/allotments', hostelController.getAllocations); // alias
 // Dashboard
 router.get('/dashboard/stats', hostelController.getDashboardStats);
 
+// Attendance
+router.get('/attendance', hostelController.getAttendance);
+router.post('/attendance', hostelController.markAttendance);
+
 // Check In / Out
 router.get('/check-in-out', hostelController.getCheckInOutLogs);
 router.post('/check-in-out', hostelController.addCheckInOutLog);
 
 
 // Leaves & Outings
+router.get('/leaves/pending-count', hostelController.getPendingLeavesCount);
 router.get('/leaves', hostelController.getLeaves);
 router.post('/leaves', hostelController.addLeave);
 router.put('/leaves/:id/status', hostelController.updateLeaveStatus);

@@ -33,13 +33,19 @@ exports.getComplaints = async (req, res) => {
 exports.createComplaint = async (req, res) => {
   try {
     const { complaintId, subject, category, submittedBy, submittedById, description, priority } = req.body;
-    const existing = await Complaint.findOne({ complaintId });
+    const finalComplaintId = (complaintId && complaintId.trim()) || `CMP-${Date.now()}`;
+    const existing = await Complaint.findOne({ complaintId: finalComplaintId });
     if (existing) {
       return res.status(400).json({ message: 'Complaint ID already exists' });
     }
     const payload = {
-      complaintId, subject, category, submittedBy, submittedById,
-      description, priority: priority || 'Medium',
+      complaintId: finalComplaintId,
+      subject: subject || `${category || 'General'} Issue`,
+      category: category || 'Other',
+      submittedBy: submittedBy || req.employee?.name || req.teacher?.name || 'Staff',
+      submittedById: submittedById || req.employee?._id || req.teacher?._id,
+      description,
+      priority: priority || 'Medium',
       status: 'Pending',
       collegeId: req.college._id
     };
@@ -87,6 +93,10 @@ exports.deleteComplaint = async (req, res) => {
 exports.getComplaintStats = async (req, res) => {
   try {
     const filter = collegeFilter(req);
+    const { category } = req.query;
+    if (category && category !== 'All') {
+      filter.category = category;
+    }
     const total = await Complaint.countDocuments(filter);
     const pending = await Complaint.countDocuments({ ...filter, status: 'Pending' });
     const inProgress = await Complaint.countDocuments({ ...filter, status: 'In Progress' });

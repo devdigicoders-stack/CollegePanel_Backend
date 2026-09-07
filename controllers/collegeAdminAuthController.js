@@ -77,10 +77,10 @@ exports.loginCollegeAdmin = async (req, res) => {
     if (teacher && teacher.status === 'Active' && teacher.password === password) {
       const collegeDetail = await College.findById(teacher.collegeId);
       
-      // Fetch role permissions for Teacher Role
+      // Fetch role permissions for Teacher
       const Role = require('../models/Role');
       let permissions = [];
-      const roleDoc = await Role.findOne({ name: 'Teacher Role', collegeId: teacher.collegeId });
+      const roleDoc = await Role.findOne({ name: { $in: ['Teacher', 'Teacher Role'] }, collegeId: teacher.collegeId });
       if (roleDoc && roleDoc.permissions) {
         permissions = roleDoc.permissions;
       }
@@ -91,12 +91,12 @@ exports.loginCollegeAdmin = async (req, res) => {
         collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
         email: teacher.email,
         username: teacher.username,
-        role: 'Teacher Role',
+        role: 'Teacher',
         designation: teacher.designation,
         department: teacher.department,
         collegeId: teacher.collegeId,
         permissions: permissions,
-        token: generateToken(teacher._id, 'Teacher Role'),
+        token: generateToken(teacher._id, 'Teacher'),
       });
     }
 

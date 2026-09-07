@@ -288,23 +288,46 @@ exports.getHods = async (req, res) => {
     }
 
     const collegeId = req.college._id;
-    
-    // Debug: Log all teachers to see what's in database
-    const allTeachers = await Teacher.find({ collegeId }).select('name designation status');
-    console.log('All Teachers:', allTeachers);
-    
-    // Try finding HODs with case-insensitive search
-    const hods = await Teacher.find({ 
-      collegeId, 
-      designation: { $regex: /^HOD$/i }  // Case-insensitive match
-    }).select('name email mobile department designation dateOfJoining status profileImage');
-    
-    console.log('HODs found:', hods.length);
-    console.log('HODs data:', hods);
-    
+    const { department, search, page, limit } = req.query;
+
+    const query = {
+      collegeId,
+      designation: { $regex: /^HOD$/i }
+    };
+
+    if (department && department !== 'All Departments' && department.trim() !== '') {
+      query.department = new RegExp(department.trim(), 'i');
+    }
+
+    if (search && search.trim() !== '') {
+      const s = search.trim();
+      query.$or = [
+        { name: { $regex: s, $options: 'i' } },
+        { email: { $regex: s, $options: 'i' } },
+        { mobile: { $regex: s, $options: 'i' } },
+        { department: { $regex: s, $options: 'i' } }
+      ];
+    }
+
+    const total = await Teacher.countDocuments(query);
+
+    let findQuery = Teacher.find(query)
+      .select('name email mobile department designation dateOfJoining status profileImage')
+      .sort({ createdAt: -1 });
+
+    if (page && limit) {
+      const p = parseInt(page, 10) || 1;
+      const l = parseInt(limit, 10) || 10;
+      findQuery = findQuery.skip((p - 1) * l).limit(l);
+    }
+
+    const hods = await findQuery;
+
     res.status(200).json({
       message: 'HODs fetched successfully',
-      data: hods
+      data: hods,
+      total,
+      pages: limit ? Math.ceil(total / (parseInt(limit, 10) || 10)) : 1
     });
   } catch (error) {
     console.error('Get HODs Error:', error);

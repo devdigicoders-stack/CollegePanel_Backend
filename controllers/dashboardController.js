@@ -54,7 +54,7 @@ exports.getOverview = async (req, res) => {
     const attendancePercent = 0;
 
     // ── Monthly Student Registrations (last 12 months) ────────────────────────
-    const students = await Student.find({ collegeId }, 'createdAt enrollmentDate');
+    const students = await Student.find({ collegeId }, 'createdAt enrollmentDate course branch');
     const monthlyStudents = Array(12).fill(0);
     students.forEach(s => {
       const d = s.enrollmentDate || s.createdAt;
@@ -73,7 +73,8 @@ exports.getOverview = async (req, res) => {
     // ── Course-wise Student Distribution ─────────────────────────────────────
     const studentsByCourse = {};
     students.forEach(s => {
-      if (s.course) studentsByCourse[s.course] = (studentsByCourse[s.course] || 0) + 1;
+      const courseName = (s.course || s.branch || 'General').trim();
+      if (courseName) studentsByCourse[courseName] = (studentsByCourse[courseName] || 0) + 1;
     });
     const courseDistribution = Object.entries(studentsByCourse)
       .map(([name, count]) => ({ name, count }))

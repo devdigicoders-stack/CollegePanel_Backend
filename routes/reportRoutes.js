@@ -8,7 +8,8 @@ const {
   getHostelReport,
   getSecurityReport,
   getStudentReports,
-  getAdmissionReports
+  getAdmissionReports,
+  getFilterOptions
 } = require('../controllers/reportController');
 const { collegeProtect, protect } = require('../middlewares/authMiddleware');
 
@@ -17,6 +18,9 @@ router.get('/students', protect, getStudentReports);
 router.get('/admissions-super', protect, getAdmissionReports); // If needed, but wait! The frontend calls /admissions.
 
 router.use(collegeProtect);
+
+// Dynamic filter options endpoint
+router.get('/options', getFilterOptions);
 
 // Module-specific report endpoints
 router.get('/admissions', getAdmissionsReport);

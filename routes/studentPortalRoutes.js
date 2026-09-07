@@ -33,15 +33,19 @@ router.use(async (req, res, next) => {
 router.get('/profile', studentPortalController.getProfile);
 router.put('/profile', studentPortalController.updateProfile);
 router.get('/dashboard/stats', studentPortalController.getDashboardStats);
+router.get('/today-classes', studentPortalController.getTodayClassesWithAttendance);
 
 router.get('/assignments', studentPortalController.getAssignments);
 router.post('/assignments/submit', studentPortalController.submitAssignment);
 
+router.get('/attendance', studentPortalController.getAttendance);
+router.get('/attendance/class-info/:classId', studentPortalController.getClassAttendanceInfo);
 router.post('/attendance/mark-auto', studentPortalController.markAutoAttendance);
 
 // Phase 3 Routes
 router.get('/hostel', collegeProtect, studentPortalController.getHostelDetails);
 router.post('/hostel/leave', collegeProtect, studentPortalController.applyHostelLeave);
+router.post('/hostel/leaves', collegeProtect, studentPortalController.applyHostelLeave);
 
 router.route('/live-notifications')
   .get(collegeProtect, studentPortalController.getLiveNotifications)

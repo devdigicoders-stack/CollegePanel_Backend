@@ -44,10 +44,10 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const updates = {
-      phone: req.body.mobile,
+      phone: req.body.mobile || req.body.phone,
       bloodGroup: req.body.bloodGroup,
       fatherName: req.body.fatherName,
-      emergencyContact: req.body.emergencyNo,
+      emergencyContact: req.body.emergencyNo || req.body.emergencyContact,
       address: req.body.address,
     };
     const student = await Student.findOneAndUpdate(
@@ -164,9 +164,26 @@ exports.getDashboardStats = async (req, res) => {
       _id: { $nin: submittedIds }
     });
 
-    const attendancePercentage = 0;
-    const total = 0;
-    const present = 0;
+    // Calculate real attendance stats from StudentAttendance
+    const studentAttendances = await StudentAttendance.find({
+      collegeId,
+      'records.studentId': studentId
+    }).select('records');
+
+    let total = 0;
+    let present = 0;
+
+    studentAttendances.forEach(att => {
+      const rec = att.records.find(r => r.studentId && r.studentId.toString() === studentId.toString());
+      if (rec) {
+        total++;
+        if (rec.status === 'Present') {
+          present++;
+        }
+      }
+    });
+
+    const attendancePercentage = total > 0 ? Math.round((present / total) * 100) : 0;
 
     res.status(200).json({
       attendancePercentage,
@@ -286,26 +303,66 @@ exports.submitAssignment = async (req, res) => {
 // Get attendance
 exports.getAttendance = async (req, res) => {
   try {
-    const attendance = await AttendanceRecord.find({ studentId: req.student._id, collegeId: req.college._id })
-      .populate('sessionId')
-      .sort({ createdAt: -1 });
-    res.status(200).json(attendance);
+    const studentId = req.student._id;
+    const collegeId = req.college._id;
+
+    const attendances = await StudentAttendance.find({
+      collegeId,
+      'records.studentId': studentId
+    })
+      .populate({
+        path: 'classId',
+        select: 'subject courseName semester section teacher'
+      })
+      .populate({
+        path: 'teacherId',
+        select: 'name'
+      })
+      .sort({ date: -1 });
+
+    const formatted = attendances.map(att => {
+      const rec = att.records.find(r => r.studentId && r.studentId.toString() === studentId.toString());
+      return {
+        _id: att._id,
+        date: att.date,
+        subject: att.classId?.subject || 'Class',
+        course: att.classId?.courseName || '',
+        semester: att.classId?.semester || '',
+        section: att.classId?.section || '',
+        teacherName: att.teacherId?.name || '',
+        status: rec ? rec.status : 'Absent',
+        remarks: rec ? rec.remarks : ''
+      };
+    });
+
+    res.status(200).json(formatted);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching attendance', error: error.message });
   }
 };
 
 const HostelAllocation = require('../models/HostelAllocation');
+const HostelRoom = require('../models/HostelRoom');
 const HostelLeaveOuting = require('../models/HostelLeaveOuting');
 const Gatepass = require('../models/Gatepass');
 
 // Get Hostel Details
 exports.getHostelDetails = async (req, res) => {
   try {
-    const allocation = await HostelAllocation.findOne({ studentId: req.student._id, status: 'Active', collegeId: req.college._id }).populate('roomId');
-    const leaves = await HostelLeaveOuting.find({ studentId: req.student._id, collegeId: req.college._id }).sort({ fromDate: -1 });
-    // Handle both cases for studentId in gatepass, based on standard schema: it's studentId usually, but let's check Gatepass model if needed. 
-    // Usually it's studentId: ObjectId in my recent gatepass implementations.
+    const allocation = await HostelAllocation.findOne({ 
+      studentId: req.student._id, 
+      status: 'Active', 
+      collegeId: req.college._id 
+    }).populate({
+      path: 'roomId',
+      model: 'HostelRoom'
+    });
+
+    const leaves = await HostelLeaveOuting.find({ 
+      studentId: req.student._id, 
+      collegeId: req.college._id 
+    }).sort({ createdAt: -1 });
+
     const gatepasses = await Gatepass.find({ 
       studentId: req.student._id, 
       collegeId: req.college._id 
@@ -320,18 +377,52 @@ exports.getHostelDetails = async (req, res) => {
 // Apply for Hostel Leave/Outing
 exports.applyHostelLeave = async (req, res) => {
   try {
-    const { duration, reason, fromDate, toDate } = req.body;
+    const { duration, type, reason, purpose, fromDate, toDate, destination, emergencyContact } = req.body;
+    
+    const finalType = (type || duration) === 'Outing' ? 'Outing' : 'Leave';
+    const finalReason = reason || purpose;
+
+    if (!finalReason || !finalReason.trim()) {
+      return res.status(400).json({ message: 'Detailed reason or purpose is required' });
+    }
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ message: 'From and To dates/times are required' });
+    }
+    if (new Date(toDate) < new Date(fromDate)) {
+      return res.status(400).json({ message: 'Return date/time must be after departure date/time' });
+    }
+
     const leave = new HostelLeaveOuting({
       studentId: req.student._id,
-      type: duration === 'Outing' ? 'Outing' : 'Leave',
-      fromDate,
-      toDate,
-      reason,
+      type: finalType,
+      fromDate: new Date(fromDate),
+      toDate: new Date(toDate),
+      reason: finalReason.trim(),
+      destination: destination ? destination.trim() : '',
+      emergencyContact: emergencyContact ? emergencyContact.trim() : '',
       status: 'Pending',
       collegeId: req.college._id
     });
     await leave.save();
-    res.status(201).json({ message: 'Hostel leave applied successfully', leave });
+
+    // Create a confirmation notification for the student
+    try {
+      const LiveNotification = require('../models/LiveNotification');
+      await LiveNotification.create({
+        userId: req.student._id,
+        title: `Hostel ${finalType} Request Submitted`,
+        message: `Your request for ${finalType} (${new Date(fromDate).toLocaleDateString('en-IN')} to ${new Date(toDate).toLocaleDateString('en-IN')}) has been submitted to the Hostel Warden for approval.`,
+        type: 'info',
+        collegeId: req.college._id
+      });
+    } catch (notifErr) {
+      console.warn('Could not create student notification:', notifErr.message);
+    }
+
+    res.status(201).json({ 
+      message: `${finalType} request submitted to Hostel Warden successfully`, 
+      leave 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error applying hostel leave', error: error.message });
   }
@@ -459,8 +550,14 @@ const StudyMaterial = require('../models/StudyMaterial');
 exports.getStudyMaterials = async (req, res) => {
   try {
     const queryOr = [];
-    if (req.student.course) queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
-    if (req.student.branch) queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
+    if (req.student.course) {
+      queryOr.push({ course: { $regex: new RegExp(req.student.course, 'i') } });
+      queryOr.push({ branch: { $regex: new RegExp(req.student.course, 'i') } });
+    }
+    if (req.student.branch) {
+      queryOr.push({ course: { $regex: new RegExp(req.student.branch, 'i') } });
+      queryOr.push({ branch: { $regex: new RegExp(req.student.branch, 'i') } });
+    }
 
     if (queryOr.length === 0) {
       return res.status(200).json([]);
@@ -500,6 +597,69 @@ const haversineDistance = (lat1, lng1, lat2, lng2) => {
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+};
+
+// Get class info & student's today attendance status before marking
+exports.getClassAttendanceInfo = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const student = req.student;
+    const collegeId = req.college._id;
+
+    if (!classId) {
+      return res.status(400).json({ message: 'Missing classId' });
+    }
+
+    const allocation = await SubjectAllocation.findById(classId)
+      .populate('teacher', 'name email')
+      .populate('subject', 'subjectName subjectCode');
+
+    if (!allocation) {
+      return res.status(404).json({ message: 'Class session not found. Invalid QR code.' });
+    }
+
+    // Check today's attendance for this student
+    const today = new Date();
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const todayAttendance = await StudentAttendance.findOne({
+      classId,
+      collegeId,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    const studentIdStr = student?._id ? student._id.toString() : '';
+    const record = todayAttendance?.records?.find(r => r.studentId && r.studentId.toString() === studentIdStr);
+
+    res.status(200).json({
+      classDetails: {
+        classId: allocation._id,
+        subjectName: allocation.subjectName || allocation.subject?.subjectName || 'Subject',
+        subjectCode: allocation.subjectCode || allocation.subject?.subjectCode || 'N/A',
+        teacherName: allocation.teacherName || allocation.teacher?.name || 'Faculty',
+        courseName: allocation.courseName,
+        department: allocation.department,
+        semester: allocation.semester,
+        geoFence: allocation.geoFence || { isEnabled: false, radius: 50 }
+      },
+      studentDetails: {
+        studentName: student?.studentName || student?.name,
+        studentId: student?.studentId || student?.appNo,
+        branch: student?.branch,
+        semester: student?.semester,
+        year: student?.year,
+        section: student?.section || 'A'
+      },
+      alreadyMarked: record ? record.status === 'Present' : false,
+      attendanceStatus: record ? record.status : 'Not Marked',
+      markedAt: record ? (todayAttendance.updatedAt || todayAttendance.date) : null
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error checking class attendance info', error: error.message });
+  }
 };
 
 // Auto mark attendance from QR Scan
@@ -556,9 +716,6 @@ exports.markAutoAttendance = async (req, res) => {
     // ────────────────────────────────────────────────────────────────
 
     // Validate if student belongs to this class
-    const branchRegex = new RegExp(allocation.courseName, 'i');
-    const isBranchMatch = branchRegex.test(req.student.branch);
-    
     const s = Number(allocation.semester);
     let targetYear = '';
     if (s === 1 || s === 2) targetYear = '1st Year';
@@ -566,7 +723,23 @@ exports.markAutoAttendance = async (req, res) => {
     else if (s === 5 || s === 6) targetYear = '3rd Year';
     else if (s === 7 || s === 8) targetYear = '4th Year';
 
-    const isYearMatch = req.student.year === targetYear;
+    let isYearMatch = false;
+    if (req.student.semester) {
+      const sNum = parseInt(req.student.semester.toString().replace(/[^0-9]/g, ''), 10);
+      if (sNum === s) isYearMatch = true;
+    }
+    if (!isYearMatch && req.student.year) {
+      isYearMatch = req.student.year === targetYear || req.student.year.includes(targetYear.split(' ')[0]);
+    }
+    if (!req.student.year && !req.student.semester) {
+      isYearMatch = true;
+    }
+
+    const allocCourse = (allocation.courseName || allocation.department || '').toLowerCase();
+    const studentBranch = (req.student.branch || req.student.course || '').toLowerCase();
+    const isBranchMatch = !studentBranch || !allocCourse || 
+      allocCourse.includes(studentBranch) || 
+      studentBranch.includes(allocCourse);
 
     if (!isBranchMatch || !isYearMatch) {
       return res.status(403).json({ message: 'You are not enrolled in this class.' });
@@ -623,3 +796,123 @@ exports.markAutoAttendance = async (req, res) => {
     res.status(500).json({ message: 'Error processing attendance scan', error: error.message });
   }
 };
+
+// Get Today's Classes & QR Attendance for Student
+exports.getTodayClassesWithAttendance = async (req, res) => {
+  try {
+    const student = req.student;
+    const collegeId = req.college._id;
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Determine student's target semesters and branch
+    let allowedSemesters = [];
+    if (student.semester) {
+      const sClean = parseInt(student.semester.toString().replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(sClean)) allowedSemesters.push(sClean);
+    }
+    
+    if (allowedSemesters.length === 0 && student.year) {
+      const yearStr = student.year.replace(' Year', '');
+      const yearToSemesters = {
+        '1st': [1, 2],
+        '2nd': [3, 4],
+        '3rd': [5, 6],
+        '4th': [7, 8]
+      };
+      allowedSemesters = yearToSemesters[yearStr] || [1];
+    }
+    if (allowedSemesters.length === 0) {
+      allowedSemesters = [1, 2, 3, 4, 5, 6, 7, 8];
+    }
+
+    // Find active SubjectAllocations for student's college, semester, and branch/course
+    const branchOr = [];
+    if (student.branch) {
+      branchOr.push({ courseName: new RegExp(student.branch, 'i') });
+      branchOr.push({ department: new RegExp(student.branch, 'i') });
+    }
+    if (student.course) {
+      branchOr.push({ courseName: new RegExp(student.course, 'i') });
+      branchOr.push({ department: new RegExp(student.course, 'i') });
+    }
+
+    const allocQuery = {
+      collegeId,
+      status: 'Active',
+      semester: { $in: allowedSemesters }
+    };
+    if (branchOr.length > 0) {
+      allocQuery.$or = branchOr;
+    }
+
+    const allocations = await SubjectAllocation.find(allocQuery)
+      .populate('teacher', 'name email')
+      .populate('subject', 'subjectName subjectCode')
+      .sort({ semester: 1, subjectName: 1 });
+
+    // Check today's attendance for this student across these classes
+    const today = new Date();
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const classIds = allocations.map(a => a._id);
+    const todayAttendances = await StudentAttendance.find({
+      classId: { $in: classIds },
+      collegeId,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    const studentIdStr = student._id.toString();
+
+    // Use live deployed domain for QR scan so mobile devices scanning the QR open the live application
+    const liveFrontend = process.env.FRONTEND_URL || 'https://college-panel-admin.vercel.app';
+
+    const classesWithAttendance = allocations.map(alloc => {
+      const attRecord = todayAttendances.find(att => att.classId.toString() === alloc._id.toString());
+      const rec = attRecord?.records?.find(r => r.studentId && r.studentId.toString() === studentIdStr);
+
+      const status = rec ? rec.status : 'Not Marked';
+      const scanUrl = `${liveFrontend}/student-portal/attendance/scan?classId=${alloc._id}`;
+
+      return {
+        _id: alloc._id,
+        classId: alloc._id,
+        subjectName: alloc.subjectName || alloc.subject?.subjectName || 'Subject',
+        subjectCode: alloc.subjectCode || alloc.subject?.subjectCode || 'N/A',
+        teacherName: alloc.teacherName || alloc.teacher?.name || 'Faculty',
+        courseName: alloc.courseName,
+        department: alloc.department,
+        semester: alloc.semester,
+        section: student.section || 'A',
+        branch: student.branch || alloc.courseName,
+        year: student.year || '1st Year',
+        geoFence: alloc.geoFence || { isEnabled: false, radius: 50 },
+        attendanceStatus: status,
+        markedAt: rec ? (attRecord.updatedAt || attRecord.date) : null,
+        scanUrl,
+        qrPayload: scanUrl
+      };
+    });
+
+    res.status(200).json({
+      studentDetails: {
+        studentName: student.studentName || student.name,
+        studentId: student.studentId || student.appNo,
+        branch: student.branch,
+        course: student.course,
+        semester: student.semester,
+        year: student.year,
+        section: student.section || 'A'
+      },
+      classes: classesWithAttendance
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching today classes', error: error.message });
+  }
+};
+

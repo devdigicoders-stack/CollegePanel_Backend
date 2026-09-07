@@ -5,27 +5,104 @@ const ensureDefaultRoles = async (collegeId) => {
   const defaultRoles = [
     {
       name: 'Teacher',
-      description: 'Default role for teaching staff',
+      description: 'Role for teaching faculty accessing Teacher Portal',
       department: 'Academic',
-      permissions: ['View Dashboard', 'View Students', 'View Subjects', 'View Sections', 'View Assignments', 'Add Assignment', 'Edit Assignment', 'Delete Assignment', 'Grade Assignment', 'Enter Marks', 'View Results', 'View Notices', 'Manage Notices']
+      permissions: [
+        'View Dashboard',
+        'View Students',
+        'View Subjects',
+        'View Sections',
+        'View Assignments',
+        'Add Assignment',
+        'Edit Assignment',
+        'Delete Assignment',
+        'Grade Assignment',
+        'Enter Marks',
+        'View Results',
+        'View Notices',
+        'Add Notice',
+        'View Complaints'
+      ]
     },
     {
       name: 'Student',
-      description: 'Default role for enrolled students',
+      description: 'Role for enrolled students accessing Student Portal',
       department: 'Academic',
-      permissions: ['View Portal Dashboard', 'Submit Course Assignments', 'View Semester Results', 'Apply For Outings', 'View Notices']
+      permissions: [
+        'View Portal Dashboard',
+        'Submit Course Assignments',
+        'View Semester Results',
+        'Apply For Outings',
+        'View Notices'
+      ]
     },
     {
       name: 'HOD',
-      description: 'Head of Department',
+      description: 'Head of Department managing Academic Department operations',
       department: 'Academic',
-      permissions: ['View Dashboard', 'View Students', 'View Teachers', 'View Departments', 'View Courses', 'View Subjects', 'View Sections', 'View Assignments', 'View Results', 'View Employees', 'View Notices', 'Manage Notices']
+      permissions: [
+        'View Dashboard',
+        'View Departments',
+        'Add Department',
+        'Edit Department',
+        'View Courses',
+        'Add Course',
+        'Edit Course',
+        'View Subjects',
+        'Add Subject',
+        'Edit Subject',
+        'View Sections',
+        'Add Section',
+        'Edit Section',
+        'View Teachers',
+        'Assign Subjects',
+        'View Students',
+        'View Assignments',
+        'Add Assignment',
+        'Edit Assignment',
+        'Delete Assignment',
+        'Grade Assignment',
+        'Enter Marks',
+        'View Results',
+        'Export Results',
+        'View Notices',
+        'Add Notice',
+        'View All Reports'
+      ]
     },
     {
       name: 'Hostel',
-      description: 'Hostel Warden or Manager',
+      description: 'Hostel Warden managing Hostel operations and student leaves',
       department: 'Hostel',
-      permissions: ['View Dashboard', 'View Hostels', 'Manage Rooms', 'Manage Allocations', 'View Hostel Reports', 'Approve Leave Outing', 'Reject Leave Outing', 'Log Check In', 'Log Check Out', 'Manage Hostel Inventory', 'Add Hostel Notice', 'View Students', 'View Notices', 'Manage Notices']
+      permissions: [
+        'View Hostels',
+        'Manage Rooms',
+        'Manage Allocations',
+        'View Hostel Reports',
+        'Approve Leave Outing',
+        'Reject Leave Outing',
+        'Log Check In',
+        'Log Check Out',
+        'Manage Hostel Inventory',
+        'Add Hostel Notice',
+        'View Students',
+        'View Complaints'
+      ]
+    },
+    {
+      name: 'Librarian',
+      description: 'College Librarian for book and fine circulation management',
+      department: 'Library',
+      permissions: [
+        'View Books',
+        'Add Book',
+        'Edit Book',
+        'Delete Book',
+        'Issue Book',
+        'Return Book',
+        'Collect Fine',
+        'View All Reports'
+      ]
     }
   ];
 
@@ -56,7 +133,11 @@ exports.getAllRoles = async (req, res) => {
     
     const query = { collegeId };
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { department: { $regex: search, $options: 'i' } }
+      ];
     }
     
     const total = await Role.countDocuments(query);

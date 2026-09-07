@@ -371,25 +371,65 @@ exports.registerStudent = async (req, res) => {
     // Auto-generate IDs if not provided
     const year = new Date().getFullYear();
     
-    const lastRegistered = await Admission.findOne({ 
-      collegeId: req.college._id, 
-      registrationStatus: 'Registered' 
-    }).sort({ createdAt: -1 });
+    // Find highest numerical suffix across both Student and Admission collections
+    let maxNum = 0;
+    
+    // Check existing Students for this year
+    const existingStudents = await Student.find({
+      studentId: new RegExp(`^STU${year}`)
+    }).select('studentId rollNo').lean();
 
-    let nextNum = 1;
-    if (lastRegistered && lastRegistered.rollNo) {
-      const lastVal = parseInt(lastRegistered.rollNo, 10);
-      if (!isNaN(lastVal)) {
-        nextNum = lastVal + 1;
+    existingStudents.forEach(s => {
+      const match = s.studentId?.match(new RegExp(`^STU${year}(\\d+)`));
+      if (match) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val) && val > maxNum) maxNum = val;
       }
-    }
-    const padded = nextNum.toString().padStart(3, '0');
+      if (s.rollNo) {
+        const rVal = parseInt(s.rollNo, 10);
+        if (!isNaN(rVal) && rVal > maxNum) maxNum = rVal;
+      }
+    });
 
-    admission.enrollNo = enrollNo || `ENR/${year}/${padded}`;
-    admission.studentId = studentId || `STU${year}${padded}`;
-    admission.rollNo = rollNo || `${padded}`;
-    admission.semester = semester || '1st';
-    admission.section = section || 'A';
+    // Check existing Admissions for this college
+    const existingAdmissions = await Admission.find({
+      collegeId: req.college._id,
+      registrationStatus: 'Registered'
+    }).select('studentId rollNo').lean();
+
+    existingAdmissions.forEach(a => {
+      const match = a.studentId?.match(new RegExp(`^STU${year}(\\d+)`));
+      if (match) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val) && val > maxNum) maxNum = val;
+      }
+      if (a.rollNo) {
+        const rVal = parseInt(a.rollNo, 10);
+        if (!isNaN(rVal) && rVal > maxNum) maxNum = rVal;
+      }
+    });
+
+    let nextNum = maxNum + 1;
+    let candidateStudentId = studentId || `STU${year}${nextNum.toString().padStart(3, '0')}`;
+    let candidateEnrollNo = enrollNo || `ENR/${year}/${nextNum.toString().padStart(3, '0')}`;
+    let candidateRollNo = rollNo || nextNum.toString().padStart(3, '0');
+
+    // Guarantee collision-free IDs by probing
+    while (
+      await Student.findOne({ studentId: candidateStudentId }) ||
+      await Admission.findOne({ studentId: candidateStudentId, _id: { $ne: admission._id } })
+    ) {
+      nextNum++;
+      candidateStudentId = `STU${year}${nextNum.toString().padStart(3, '0')}`;
+      candidateEnrollNo = `ENR/${year}/${nextNum.toString().padStart(3, '0')}`;
+      candidateRollNo = nextNum.toString().padStart(3, '0');
+    }
+
+    admission.enrollNo = candidateEnrollNo;
+    admission.studentId = candidateStudentId;
+    admission.rollNo = candidateRollNo;
+    admission.semester = semester || admission.semester || 'Sem 1';
+    admission.section = section || admission.section || 'A';
     admission.registrationStatus = 'Registered';
 
     await admission.save();
@@ -397,21 +437,36 @@ exports.registerStudent = async (req, res) => {
     // Auto-create Student Record if not exists
     let studentRecord = await Student.findOne({ studentId: admission.studentId });
     if (!studentRecord) {
+      // Collision-free unique username
+      let baseUsername = `${admission.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}.${nextNum.toString().padStart(3, '0')}`;
+      let username = baseUsername;
+      let userCollides = await Student.findOne({ username });
+      while (userCollides) {
+        username = `${baseUsername}.${Math.floor(100 + Math.random() * 900)}`;
+        userCollides = await Student.findOne({ username });
+      }
+
       studentRecord = await Student.create({
         studentId: admission.studentId,
         studentName: admission.name,
-        email: admission.email || `${admission.name.toLowerCase().replace(/\s+/g, '.')}@student.edu`,
+        email: admission.email || `${admission.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@student.edu`,
         phone: admission.mobile || '',
         gender: admission.gender || 'Male',
         dob: admission.dob ? new Date(admission.dob) : new Date(),
         address: admission.currentAddress || 'N/A',
+        bloodGroup: admission.bloodGroup || '',
         course: admission.course,
         session: admission.session || admission.academicSession || '',
         branch: admission.branch || admission.course || '',
         year: admission.year || '1st Year',
+        semester: admission.semester || 'Sem 1',
+        section: admission.section || 'A',
+        rollNo: admission.rollNo,
+        enrollmentNo: admission.enrollNo,
+        enrollNo: admission.enrollNo,
         enrollmentDate: new Date(),
         collegeId: admission.collegeId,
-        username: `${admission.name.toLowerCase().replace(/\s+/g, '.')}.${Date.now().toString().slice(-4)}`,
+        username: username,
         password: `Student@123`,
         // Demographics
         aadhaar: admission.aadhaar || '',

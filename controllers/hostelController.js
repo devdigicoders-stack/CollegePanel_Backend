@@ -1,5 +1,6 @@
 const HostelRoom = require('../models/HostelRoom');
 const HostelAllocation = require('../models/HostelAllocation');
+const HostelAttendance = require('../models/HostelAttendance');
 const Student = require('../models/Student');
 const HostelCheckInOut = require('../models/HostelCheckInOut');
 const HostelLeaveOuting = require('../models/HostelLeaveOuting');
@@ -269,6 +270,15 @@ exports.markAttendance = async (req, res) => {
 };
 
 // Leaves & Outings
+exports.getPendingLeavesCount = async (req, res) => {
+  try {
+    const count = await HostelLeaveOuting.countDocuments({ collegeId: req.college._id, status: 'Pending' });
+    res.status(200).json({ count });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching pending leaves count', error: error.message });
+  }
+};
+
 exports.getLeaves = async (req, res) => {
   try {
     const { status, type } = req.query;
@@ -277,7 +287,7 @@ exports.getLeaves = async (req, res) => {
     if (type && type !== 'All') query.type = type;
 
     const leaves = await HostelLeaveOuting.find(query)
-      .populate('studentId', 'studentName studentId')
+      .populate('studentId', 'studentName studentId course branch phone emergencyContact fatherMobile')
       .sort({ createdAt: -1 });
     res.status(200).json(leaves);
   } catch (error) {
@@ -287,17 +297,20 @@ exports.getLeaves = async (req, res) => {
 
 exports.addLeave = async (req, res) => {
   try {
-    const { studentId, type, fromDate, toDate, reason } = req.body;
+    const { studentId, type, fromDate, toDate, reason, destination, emergencyContact, remarks } = req.body;
     if (!studentId || !type || !fromDate || !toDate || !reason) {
       return res.status(400).json({ message: 'All fields are required' });
     }
     const leave = new HostelLeaveOuting({
       studentId, type, fromDate, toDate, reason,
+      destination: destination || '',
+      emergencyContact: emergencyContact || '',
+      remarks: remarks || '',
       status: 'Pending',
       collegeId: req.college._id
     });
     await leave.save();
-    await leave.populate('studentId', 'studentName studentId');
+    await leave.populate('studentId', 'studentName studentId course branch phone emergencyContact');
     res.status(201).json({ message: 'Leave request created', leave });
   } catch (error) {
     res.status(500).json({ message: 'Error creating leave request', error: error.message });
@@ -307,14 +320,52 @@ exports.addLeave = async (req, res) => {
 exports.updateLeaveStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, remarks, rejectionReason } = req.body;
+
+    if (!['Approved', 'Rejected', 'Pending'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be Approved, Rejected, or Pending.' });
+    }
+
+    const updateData = {
+      status,
+      actionDate: new Date(),
+      actionBy: req.employee?.name || req.college?.name || 'Hostel Warden'
+    };
+    if (remarks !== undefined) updateData.remarks = remarks;
+    if (rejectionReason !== undefined) updateData.rejectionReason = rejectionReason;
+
     const leave = await HostelLeaveOuting.findOneAndUpdate(
       { _id: id, collegeId: req.college._id },
-      { status },
+      updateData,
       { new: true }
-    ).populate('studentId', 'studentName studentId');
+    ).populate('studentId', 'studentName studentId course branch phone emergencyContact');
+
     if (!leave) return res.status(404).json({ message: 'Leave request not found' });
-    res.status(200).json({ message: `Leave ${status}`, leave });
+
+    // Send LiveNotification to the student if model exists
+    try {
+      const LiveNotification = require('../models/LiveNotification');
+      const formattedFrom = new Date(leave.fromDate).toLocaleDateString('en-IN');
+      const formattedTo = new Date(leave.toDate).toLocaleDateString('en-IN');
+      let notifMessage = `Your ${leave.type} request (${formattedFrom} to ${formattedTo}) has been ${status.toLowerCase()} by Hostel Warden.`;
+      if (status === 'Rejected' && rejectionReason) {
+        notifMessage += ` Reason: ${rejectionReason}`;
+      } else if (status === 'Approved' && remarks) {
+        notifMessage += ` Instructions: ${remarks}`;
+      }
+
+      await LiveNotification.create({
+        userId: leave.studentId._id,
+        title: `Hostel ${leave.type} ${status}`,
+        message: notifMessage,
+        type: status === 'Approved' ? 'success' : 'danger',
+        collegeId: req.college._id
+      });
+    } catch (notifErr) {
+      console.warn('Could not dispatch live notification:', notifErr.message);
+    }
+
+    res.status(200).json({ message: `Leave request ${status.toLowerCase()} successfully`, leave });
   } catch (error) {
     res.status(500).json({ message: 'Error updating leave', error: error.message });
   }

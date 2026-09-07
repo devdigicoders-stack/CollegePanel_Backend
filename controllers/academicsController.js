@@ -362,10 +362,11 @@ exports.getSections = async (req, res) => {
       .populate('classTeacher', 'name email mobile department designation')
       .sort({ courseName: 1, name: 1 });
     
-    // Format sections to include classTeacherName for display
+    // Format sections to include classTeacherName for display and preserve teacher ID for editing
     const formattedSections = sections.map(section => {
       const sectionObj = section.toObject();
-      sectionObj.classTeacher = section.classTeacher ? section.classTeacher.name : sectionObj.classTeacherName || 'N/A';
+      sectionObj.classTeacherName = section.classTeacher ? section.classTeacher.name : (sectionObj.classTeacherName || 'N/A');
+      sectionObj.classTeacher = section.classTeacher ? (section.classTeacher._id ? section.classTeacher._id.toString() : section.classTeacher) : '';
       return sectionObj;
     });
     
@@ -392,20 +393,25 @@ exports.createSection = async (req, res) => {
   try {
     const { name, courseName, semester, classTeacher, totalStudents, room, status } = req.body;
     
-    if (!name || !courseName || !semester || !classTeacher) {
-      return res.status(400).json({ message: 'All required fields must be provided' });
+    if (!name || !courseName || !semester) {
+      return res.status(400).json({ message: 'Section name, Branch and Semester are required' });
     }
 
-    const section = await Section.create({
+    const payload = {
       name,
       courseName,
       semester,
-      classTeacher,
       totalStudents: totalStudents || 0,
       room: room || '',
       status: status || 'Active',
       collegeId: req.college._id
-    });
+    };
+
+    if (classTeacher) {
+      payload.classTeacher = classTeacher;
+    }
+
+    const section = await Section.create(payload);
 
     res.status(201).json({ message: 'Section created successfully', section });
   } catch (error) {
@@ -427,7 +433,9 @@ exports.updateSection = async (req, res) => {
     if (name) section.name = name;
     if (courseName) section.courseName = courseName;
     if (semester) section.semester = semester;
-    if (classTeacher) section.classTeacher = classTeacher;
+    if (classTeacher !== undefined) {
+      section.classTeacher = classTeacher || null;
+    }
     if (totalStudents !== undefined) section.totalStudents = totalStudents;
     if (room !== undefined) section.room = room;
     if (status) section.status = status;

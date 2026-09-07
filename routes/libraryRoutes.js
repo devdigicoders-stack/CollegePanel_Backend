@@ -13,6 +13,7 @@ router.post('/books', libraryController.addBook);
 router.put('/books/:id', libraryController.updateBook);
 router.delete('/books/:id', libraryController.deleteBook);
 router.get('/categories', libraryController.getCategories);
+router.get('/members', libraryController.getMembers);
 
 router.get('/transactions', libraryController.getTransactions);
 router.get('/transactions/:id', libraryController.getTransactionById);

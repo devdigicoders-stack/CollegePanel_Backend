@@ -5,6 +5,12 @@ const schema = new mongoose.Schema({
   fromDate: { type: Date, required: true },
   toDate: { type: Date, required: true },
   reason: { type: String, required: true },
+  destination: { type: String, default: '' },
+  emergencyContact: { type: String, default: '' },
+  rejectionReason: { type: String, default: '' },
+  remarks: { type: String, default: '' },
+  actionBy: { type: String, default: '' },
+  actionDate: { type: Date },
   status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true }
 }, { timestamps: true });
