@@ -31,6 +31,40 @@ exports.createMaterial = async (req, res) => {
     });
 
     await material.save();
+
+    // 🔔 REAL-TIME LIVE NOTIFICATION + SOUND + FCM PUSH
+    try {
+      const io = req.app.get('io');
+      const connectedUsers = req.app.get('connectedUsers');
+      const { notifyStudentsOfClass } = require('../utils/studentNotificationHelper');
+      const Subject = require('../models/Subject');
+      
+      const subjectDoc = await Subject.findOne({ name: subject, collegeId: req.college._id });
+      const targetSemester = req.body.semester || subjectDoc?.semester || '';
+      const targetDept = subjectDoc?.department || branchVal;
+      const uploaderName = req.teacher ? req.teacher.name : (req.admin ? req.admin.name : (req.college?.adminName || 'College Admin'));
+
+      await notifyStudentsOfClass({
+        collegeId: req.college._id,
+        courseName: branchVal,
+        department: targetDept,
+        semester: targetSemester,
+        title: `📚 New Study Material: ${subject}`,
+        message: `${uploaderName} uploaded: "${title}" (${type}).`,
+        type: 'StudyMaterial',
+        link: '/student/materials',
+        extraData: {
+          materialId: material._id.toString(),
+          subject: subject || '',
+          uploaderName
+        },
+        io,
+        connectedUsers
+      });
+    } catch (notifErr) {
+      console.error('Error notifying students of material:', notifErr.message);
+    }
+
     res.status(201).json({ message: 'Material created successfully', material });
   } catch (error) {
     res.status(500).json({ message: 'Error creating material', error: error.message });

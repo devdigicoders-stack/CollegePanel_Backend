@@ -89,7 +89,9 @@ const admissionSchema = new mongoose.Schema({
     type: String, 
     enum: ['Pending Registration', 'Registered'],
     default: 'Pending Registration'
-  }
+  },
+  // Push notification device tokens
+  fcmTokens: [{ type: String }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Admission', admissionSchema);

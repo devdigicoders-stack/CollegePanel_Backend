@@ -22,6 +22,7 @@ const employeeSchema = new mongoose.Schema({
   password: {
     type: String
   },
+  fcmTokens: [{ type: String }],
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true }
 }, { timestamps: true });
 

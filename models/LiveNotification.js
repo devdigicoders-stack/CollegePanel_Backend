@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 
 const liveNotificationSchema = new mongoose.Schema({
-  userId: { type: String, required: true }, // Store employeeId or admissionNumber
-  role: { type: String, required: true, enum: ['Teacher', 'Student', 'Admin', 'Superadmin'] },
+  userId: { type: String, required: true }, // Store employeeId, studentId, admin _id, or 'admin'
+  role: { type: String, default: 'Admin' },
   title: { type: String, required: true },
   message: { type: String, required: true },
-  type: { type: String, required: true, enum: ['Assignment', 'Notice', 'Complaint', 'General'] },
+  type: { type: String, default: 'General' },
   link: { type: String }, // Optional link to redirect user when clicked
   isRead: { type: Boolean, default: false },
   collegeId: { type: mongoose.Schema.Types.ObjectId, ref: 'College', required: true }

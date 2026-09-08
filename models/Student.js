@@ -78,7 +78,10 @@ const studentSchema = new mongoose.Schema({
     name: { type: String },
     url: { type: String },
     status: { type: String, default: 'Verified' }
-  }]
+  }],
+
+  // Push notification device tokens
+  fcmTokens: [{ type: String }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Student', studentSchema);

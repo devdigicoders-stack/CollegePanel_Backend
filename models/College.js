@@ -39,7 +39,8 @@ const collegeSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   rawPassword: { type: String }, // Storing plaintext password as requested by user
-  isActive: { type: Boolean, default: true }
+  isActive: { type: Boolean, default: true },
+  fcmTokens: [{ type: String }]
 }, { timestamps: true });
 
 // Hash password before saving

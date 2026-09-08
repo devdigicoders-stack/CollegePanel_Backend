@@ -125,8 +125,18 @@ io.on('connection', (socket) => {
 
   socket.on('register', (userId) => {
     if (userId) {
-      connectedUsers.set(userId, socket.id);
-      console.log(`User registered: ${userId} with socket ${socket.id}`);
+      const uIdStr = String(userId);
+      connectedUsers.set(uIdStr, socket.id);
+      socket.join(`user_${uIdStr}`);
+      socket.join(`student_${uIdStr}`);
+      console.log(`User registered: ${uIdStr} with socket ${socket.id} in rooms user_${uIdStr}, student_${uIdStr}`);
+    }
+  });
+
+  socket.on('join_college', (collegeId) => {
+    if (collegeId) {
+      socket.join(`college_${collegeId}`);
+      console.log(`Socket ${socket.id} joined room college_${collegeId}`);
     }
   });
 

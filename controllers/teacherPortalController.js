@@ -319,6 +319,33 @@ exports.createClassNotice = async (req, res) => {
       collegeId: req.college._id
     });
     await newNotice.save();
+
+    // 🔔 REAL-TIME LIVE NOTIFICATION + SOUND + FCM PUSH FOR TEACHER CLASS NOTICE
+    try {
+      const io = req.app.get('io');
+      const connectedUsers = req.app.get('connectedUsers');
+      const { notifyAudienceOfNotice } = require('../utils/studentNotificationHelper');
+      const allocation = await SubjectAllocation.findById(req.params.classId);
+      const teacherName = newNotice.postedBy || 'Teacher';
+
+      await notifyAudienceOfNotice({
+        collegeId: req.college._id,
+        title: `📢 Notice: ${title}`,
+        message: details ? (details.length > 120 ? `${details.slice(0, 117)}...` : details) : title,
+        targetAudience: newNotice.targetAudience,
+        department: allocation?.department || department,
+        courseName: allocation?.courseName,
+        semester: allocation?.semester,
+        noticeId: newNotice.noticeId,
+        postedBy: teacherName,
+        postedByRole: 'Teacher',
+        io,
+        connectedUsers
+      });
+    } catch (notifErr) {
+      console.error('Error notifying audience of teacher class notice:', notifErr.message);
+    }
+
     res.status(201).json({ message: 'Notice published', data: newNotice });
   } catch (error) {
     res.status(500).json({ message: 'Error publishing notice', error: error.message });
@@ -383,6 +410,35 @@ exports.uploadStudyMaterial = async (req, res) => {
     });
 
     await newMaterial.save();
+
+    // 🔔 REAL-TIME LIVE NOTIFICATION + SOUND + FCM PUSH
+    try {
+      const io = req.app.get('io');
+      const connectedUsers = req.app.get('connectedUsers');
+      const { notifyStudentsOfClass } = require('../utils/studentNotificationHelper');
+      const teacherName = allocation.teacherName || (req.teacher ? req.teacher.name : 'Faculty');
+
+      await notifyStudentsOfClass({
+        collegeId: req.college._id,
+        courseName: allocation.courseName,
+        department: allocation.department,
+        semester: allocation.semester,
+        title: `📚 New Study Material: ${allocation.subjectName}`,
+        message: `${teacherName} uploaded new study notes: "${title}" (${type || 'Document'}).`,
+        type: 'StudyMaterial',
+        link: '/student/materials',
+        extraData: {
+          materialId: newMaterial._id.toString(),
+          subject: allocation.subjectName,
+          teacherName
+        },
+        io,
+        connectedUsers
+      });
+    } catch (notifErr) {
+      console.error('Error notifying students of study material:', notifErr.message);
+    }
+
     res.status(201).json({ message: 'Material uploaded successfully', data: newMaterial });
   } catch (error) {
     res.status(500).json({ message: 'Error uploading material', error: error.message });
@@ -535,51 +591,35 @@ exports.createAssignment = async (req, res) => {
 
     await newAssignment.save();
 
-    // Fetch students of this class
-    const yearMapping = { 
-      '1': '1st', '2': '1st', 'Sem 1': '1st', 'Sem 2': '1st',
-      '3': '2nd', '4': '2nd', 'Sem 3': '2nd', 'Sem 4': '2nd',
-      '5': '3rd', '6': '3rd', 'Sem 5': '3rd', 'Sem 6': '3rd',
-      '7': '4th', '8': '4th', 'Sem 7': '4th', 'Sem 8': '4th'
-    };
-    const targetYearBase = yearMapping[allocation.semester.toString()] || '1st';
-    
-    const students = await Student.find({
-      course: allocation.courseName,
-      branch: allocation.department,
-      year: { $in: [targetYearBase, `${targetYearBase} Year`] },
-      collegeId: req.college._id
-    });
+    // 🔔 REAL-TIME LIVE NOTIFICATION + SOUND + FCM PUSH
+    try {
+      const io = req.app.get('io');
+      const connectedUsers = req.app.get('connectedUsers');
+      const { notifyStudentsOfClass } = require('../utils/studentNotificationHelper');
+      const teacherName = allocation.teacherName || (req.teacher ? req.teacher.name : 'Faculty');
+      const formattedDueDate = dueDate ? new Date(dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Soon';
 
-    // Create notifications for students and emit
-    const io = req.app.get('io');
-    const connectedUsers = req.app.get('connectedUsers');
-
-    if (students && students.length > 0) {
-      const notifications = students.map(student => ({
-        userId: student._id.toString(),
-        role: 'Student',
-        title: 'New Assignment',
-        message: `${allocation.teacherName} assigned a new task: ${title}`,
+      await notifyStudentsOfClass({
+        collegeId: req.college._id,
+        courseName: allocation.courseName,
+        department: allocation.department,
+        semester: allocation.semester,
+        section: (allocation.section && allocation.section !== 'All' && allocation.section !== 'All Sections') ? allocation.section : '',
+        title: `📝 New Assignment: ${allocation.subjectName}`,
+        message: `${teacherName} assigned: "${title}". Due date: ${formattedDueDate}.`,
         type: 'Assignment',
-        collegeId: req.college._id
-      }));
-
-      await LiveNotification.insertMany(notifications);
-
-      // Emit to online students
-      if (io && connectedUsers) {
-        students.forEach(student => {
-          const socketId = connectedUsers.get(student._id.toString());
-          if (socketId) {
-            io.to(socketId).emit('new_notification', {
-              title: 'New Assignment',
-              message: `${allocation.teacherName} assigned a new task: ${title}`,
-              type: 'Assignment'
-            });
-          }
-        });
-      }
+        link: '/student/assignments',
+        extraData: {
+          assignmentId: newAssignment.assignmentId,
+          subject: allocation.subjectName,
+          teacherName,
+          dueDate: formattedDueDate
+        },
+        io,
+        connectedUsers
+      });
+    } catch (notifErr) {
+      console.error('Error notifying students of assignment:', notifErr.message);
     }
 
     res.status(201).json({ message: 'Assignment created successfully', data: newAssignment });
@@ -604,10 +644,18 @@ exports.getLiveNotifications = async (req, res) => {
 exports.markNotificationsRead = async (req, res) => {
   try {
     const teacherId = getTeacherId(req);
-    await LiveNotification.updateMany(
-      { userId: teacherId, collegeId: req.college._id, isRead: false },
-      { $set: { isRead: true } }
-    );
+    const { id } = req.body || {};
+    if (id) {
+      await LiveNotification.updateOne(
+        { _id: id, collegeId: req.college._id },
+        { $set: { isRead: true } }
+      );
+    } else {
+      await LiveNotification.updateMany(
+        { userId: teacherId, collegeId: req.college._id, isRead: false },
+        { $set: { isRead: true } }
+      );
+    }
     res.json({ message: 'Notifications marked as read' });
   } catch (error) {
     res.status(500).json({ message: 'Error updating notifications', error: error.message });

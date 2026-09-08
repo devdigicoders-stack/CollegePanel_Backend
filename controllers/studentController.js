@@ -120,10 +120,10 @@ exports.getStudentFilters = async (req, res) => {
       Admission.distinct('course', match)
     ]);
     
-    const allBranches = [...new Set([...branchesS, ...branchesA])];
-    const allYears = [...new Set([...yearsS, ...yearsA])];
-    const sessions = [...new Set([...sessionsS, ...sessionsA])];
-    const allCourses = [...new Set([...coursesS, ...coursesA])];
+    const allBranches = [...new Set([...branchesS, ...branchesA].map(b => b && typeof b === 'string' ? b.trim() : b).filter(Boolean))];
+    const allYears = [...new Set([...yearsS, ...yearsA].map(y => y && typeof y === 'string' ? y.trim() : y).filter(Boolean))];
+    const sessions = [...new Set([...sessionsS, ...sessionsA].map(s => s && typeof s === 'string' ? s.trim() : s).filter(Boolean))];
+    const allCourses = [...new Set([...coursesS, ...coursesA].map(c => c && typeof c === 'string' ? c.trim() : c).filter(Boolean))];
     
     // Generate dynamic sessions for the last 4 years and next 2 years
     const currentYear = new Date().getFullYear();

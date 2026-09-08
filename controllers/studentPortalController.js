@@ -474,10 +474,18 @@ exports.getLiveNotifications = async (req, res) => {
 exports.markNotificationsRead = async (req, res) => {
   try {
     const studentId = req.student._id;
-    await LiveNotification.updateMany(
-      { userId: studentId, collegeId: req.college._id, isRead: false },
-      { $set: { isRead: true } }
-    );
+    const { id } = req.body || {};
+    if (id) {
+      await LiveNotification.updateOne(
+        { _id: id, collegeId: req.college._id },
+        { $set: { isRead: true } }
+      );
+    } else {
+      await LiveNotification.updateMany(
+        { userId: studentId, collegeId: req.college._id, isRead: false },
+        { $set: { isRead: true } }
+      );
+    }
     res.json({ message: 'Notifications marked as read' });
   } catch (error) {
     res.status(500).json({ message: 'Error updating notifications', error: error.message });
@@ -610,9 +618,28 @@ exports.getClassAttendanceInfo = async (req, res) => {
       return res.status(400).json({ message: 'Missing classId' });
     }
 
-    const allocation = await SubjectAllocation.findById(classId)
+    let allocation = await SubjectAllocation.findById(classId)
       .populate('teacher', 'name email')
       .populate('subject', 'subjectName subjectCode');
+
+    if (!allocation) {
+      const Subject = require('../models/Subject');
+      const Teacher = require('../models/Teacher');
+      const subjectDoc = await Subject.findById(classId);
+      if (subjectDoc) {
+        const teacher = await Teacher.findOne({ collegeId });
+        allocation = {
+          _id: subjectDoc._id,
+          subjectName: subjectDoc.name,
+          subjectCode: subjectDoc.code,
+          teacherName: teacher ? teacher.name : 'Faculty In-charge',
+          courseName: subjectDoc.courseName,
+          department: subjectDoc.department,
+          semester: subjectDoc.semester,
+          geoFence: { isEnabled: false, radius: 50 }
+        };
+      }
+    }
 
     if (!allocation) {
       return res.status(404).json({ message: 'Class session not found. Invalid QR code.' });
@@ -681,7 +708,44 @@ exports.markAutoAttendance = async (req, res) => {
     }
 
     // Verify the class allocation
-    const allocation = await SubjectAllocation.findById(classId);
+    let allocation = await SubjectAllocation.findById(classId);
+    if (!allocation) {
+      const Subject = require('../models/Subject');
+      const Teacher = require('../models/Teacher');
+      const Course = require('../models/Course');
+      const subjectDoc = await Subject.findById(classId);
+      if (subjectDoc) {
+        let defaultTeacher = await Teacher.findOne({ collegeId: req.college._id });
+        if (!defaultTeacher) {
+          defaultTeacher = await Teacher.findOne({});
+        }
+        let courseDoc = await Course.findOne({ 
+          collegeId: req.college._id,
+          $or: [
+            { name: new RegExp(subjectDoc.courseName || req.student?.branch || '', 'i') },
+            { department: new RegExp(subjectDoc.department || req.student?.course || '', 'i') }
+          ]
+        }) || await Course.findOne({ collegeId: req.college._id });
+
+        if (defaultTeacher && courseDoc) {
+          allocation = await SubjectAllocation.create({
+            teacher: defaultTeacher._id,
+            teacherName: defaultTeacher.name,
+            course: courseDoc._id,
+            courseName: subjectDoc.courseName || courseDoc.name || req.student?.branch || 'General',
+            department: subjectDoc.department || courseDoc.department || 'Diploma',
+            semester: subjectDoc.semester || 1,
+            subject: subjectDoc._id,
+            subjectName: subjectDoc.name,
+            subjectCode: subjectDoc.code,
+            status: 'Active',
+            collegeId: req.college._id
+          });
+          classId = allocation._id;
+        }
+      }
+    }
+
     if (!allocation) {
       return res.status(404).json({ message: 'Class not found. Invalid QR Code.' });
     }
@@ -848,10 +912,74 @@ exports.getTodayClassesWithAttendance = async (req, res) => {
       allocQuery.$or = branchOr;
     }
 
-    const allocations = await SubjectAllocation.find(allocQuery)
+    let allocations = await SubjectAllocation.find(allocQuery)
       .populate('teacher', 'name email')
       .populate('subject', 'subjectName subjectCode')
       .sort({ semester: 1, subjectName: 1 });
+
+    // Auto-resilience check: check if any Subject exists for this branch/course/semester without allocation
+    try {
+      const Subject = require('../models/Subject');
+      const Teacher = require('../models/Teacher');
+
+      const subjectQuery = {
+        collegeId,
+        status: 'Active',
+        semester: { $in: allowedSemesters }
+      };
+      if (branchOr.length > 0) {
+        subjectQuery.$or = branchOr;
+      }
+
+      const unallocatedSubjects = await Subject.find(subjectQuery);
+      let defaultTeacher = null;
+      if (unallocatedSubjects.length > 0) {
+        defaultTeacher = await Teacher.findOne({ collegeId }) || await Teacher.findOne({});
+      }
+
+      for (const sub of unallocatedSubjects) {
+        const isAlreadyAllocated = allocations.some(a => 
+          (a.subject && a.subject._id && a.subject._id.toString() === sub._id.toString()) ||
+          (a.subject && a.subject.toString() === sub._id.toString()) ||
+          (a.subjectCode && sub.code && a.subjectCode.toLowerCase() === sub.code.toLowerCase()) ||
+          (a.subjectName && sub.name && a.subjectName.toLowerCase() === sub.name.toLowerCase())
+        );
+
+        if (!isAlreadyAllocated && defaultTeacher) {
+          try {
+            const Course = require('../models/Course');
+            let courseDoc = await Course.findOne({ 
+              collegeId,
+              $or: [
+                { name: new RegExp(sub.courseName || student.branch || '', 'i') },
+                { department: new RegExp(sub.department || student.course || '', 'i') }
+              ]
+            }) || await Course.findOne({ collegeId });
+
+            if (courseDoc) {
+              const autoAlloc = await SubjectAllocation.create({
+                teacher: defaultTeacher._id,
+                teacherName: defaultTeacher.name,
+                course: courseDoc._id,
+                courseName: sub.courseName || courseDoc.name || student.branch || student.course || 'General',
+                department: sub.department || courseDoc.department || student.course || student.branch || 'Diploma',
+                semester: sub.semester || 1,
+                subject: sub._id,
+                subjectName: sub.name,
+                subjectCode: sub.code,
+                status: 'Active',
+                collegeId
+              });
+              allocations.push(autoAlloc);
+            }
+          } catch (err) {
+            console.error('Error auto-creating allocation:', err.message);
+          }
+        }
+      }
+    } catch (allocErr) {
+      console.error('Error checking unallocated subjects:', allocErr.message);
+    }
 
     // Check today's attendance for this student across these classes
     const today = new Date();

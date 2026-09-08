@@ -101,6 +101,42 @@ exports.createAssignment = async (req, res) => {
       collegeId: req.college._id
     };
     const assignment = await Assignment.create(payload);
+
+    // 🔔 REAL-TIME LIVE NOTIFICATION + SOUND + FCM PUSH
+    try {
+      const io = req.app.get('io');
+      const connectedUsers = req.app.get('connectedUsers');
+      const { notifyStudentsOfClass } = require('../utils/studentNotificationHelper');
+      const Subject = require('../models/Subject');
+      const subjectDoc = await Subject.findOne({ name: subject, collegeId: req.college._id });
+      const targetDept = subjectDoc?.department || department || branchVal;
+      const targetSemester = semester || subjectDoc?.semester || 'Sem 1';
+      const targetSection = (section && section !== 'All' && section !== 'All Sections') ? section : '';
+      const formattedDueDate = dueDate ? new Date(dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Soon';
+
+      await notifyStudentsOfClass({
+        collegeId: req.college._id,
+        courseName: branchVal,
+        department: targetDept,
+        semester: targetSemester,
+        section: targetSection,
+        title: `📝 New Assignment: ${subject || title}`,
+        message: `${payload.teacherName} assigned: "${title}". Due date: ${formattedDueDate}.`,
+        type: 'Assignment',
+        link: '/student/assignments',
+        extraData: {
+          assignmentId: assignment.assignmentId,
+          subject: subject || '',
+          teacherName: payload.teacherName,
+          dueDate: formattedDueDate
+        },
+        io,
+        connectedUsers
+      });
+    } catch (notifErr) {
+      console.error('Error notifying students of assignment:', notifErr.message);
+    }
+
     res.status(201).json(assignment);
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -77,6 +77,31 @@ exports.createNotice = async (req, res) => {
       collegeId: req.college._id
     };
     const notice = await Notice.create(payload);
+
+    // 🔔 REAL-TIME LIVE NOTIFICATION + SOUND + FCM PUSH FOR NOTICE
+    if (notice.status === 'Published') {
+      try {
+        const io = req.app.get('io');
+        const connectedUsers = req.app.get('connectedUsers');
+        const { notifyAudienceOfNotice } = require('../utils/studentNotificationHelper');
+        
+        await notifyAudienceOfNotice({
+          collegeId: req.college._id,
+          title: `📢 Notice: ${title}`,
+          message: details ? (details.length > 120 ? `${details.slice(0, 117)}...` : details) : title,
+          targetAudience: payload.targetAudience,
+          department: payload.department,
+          noticeId: notice.noticeId,
+          postedBy: resolvedPostedBy,
+          postedByRole: resolvedPostedByRole,
+          io,
+          connectedUsers
+        });
+      } catch (notifErr) {
+        console.error('Error notifying audience of notice:', notifErr.message);
+      }
+    }
+
     res.status(201).json(notice);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -111,6 +136,30 @@ exports.updateNotice = async (req, res) => {
       { returnDocument: 'after', runValidators: true }
     ).select('-__v');
     if (!notice) return res.status(404).json({ message: 'Notice not found' });
+
+    if (notice.status === 'Published') {
+      try {
+        const io = req.app.get('io');
+        const connectedUsers = req.app.get('connectedUsers');
+        const { notifyAudienceOfNotice } = require('../utils/studentNotificationHelper');
+        
+        await notifyAudienceOfNotice({
+          collegeId: req.college._id,
+          title: `📢 Notice: ${notice.title}`,
+          message: notice.details ? (notice.details.length > 120 ? `${notice.details.slice(0, 117)}...` : notice.details) : notice.title,
+          targetAudience: notice.targetAudience,
+          department: notice.department,
+          noticeId: notice.noticeId,
+          postedBy: notice.postedBy,
+          postedByRole: notice.postedByRole || 'College Admin',
+          io,
+          connectedUsers
+        });
+      } catch (notifErr) {
+        console.error('Error notifying audience of updated notice:', notifErr.message);
+      }
+    }
+
     res.json({ message: 'Notice updated successfully', notice });
   } catch (error) {
     res.status(500).json({ message: error.message });

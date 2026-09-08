@@ -240,6 +240,72 @@ exports.createPublicAdmission = async (req, res) => {
 
     await admission.save();
 
+    // 🔔 REAL-TIME NOTIFICATION SYSTEM (Firebase Push + Socket.IO + DB)
+    const notifTitle = '🎓 New Admission Application!';
+    const branchInfo = otherFields.branch ? ` (${otherFields.branch})` : '';
+    const notifMessage = `${name} has submitted a new admission application for ${course}${branchInfo}. Application No: ${appNo}`;
+    const notifLink = '/admissions/applications';
+
+    // 1. Save in LiveNotification DB for in-app bell notification
+    try {
+      const LiveNotification = require('../models/LiveNotification');
+      await LiveNotification.create({
+        userId: 'admin',
+        role: 'Admin',
+        title: notifTitle,
+        message: notifMessage,
+        type: 'Admission',
+        link: notifLink,
+        isRead: false,
+        collegeId
+      });
+    } catch (dbErr) {
+      console.error('Error saving LiveNotification:', dbErr.message);
+    }
+
+    // 2. Real-time Socket.IO alert for open panels (single clean emission)
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        const socketPayload = {
+          title: notifTitle,
+          message: notifMessage,
+          appNo,
+          name,
+          course,
+          branch: otherFields.branch || '',
+          link: notifLink,
+          createdAt: new Date(),
+          collegeId
+        };
+        io.emit('new_admission_alert', socketPayload);
+        io.emit('admissions_updated', { collegeId });
+      }
+    } catch (socketErr) {
+      console.error('Error emitting Socket.IO alert:', socketErr.message);
+    }
+
+    // 3. Firebase Cloud Messaging (FCM) Push (Single clean push via Topic)
+    try {
+      const { sendTopicPush } = require('../config/firebase');
+
+      await sendTopicPush(`college_${collegeId}_admissions`, {
+        title: notifTitle,
+        body: notifMessage,
+        data: {
+          link: notifLink,
+          appNo: String(appNo),
+          studentName: String(name),
+          course: String(course),
+          type: 'NEW_ADMISSION',
+          collegeId: String(collegeId)
+        }
+      });
+      console.log(`✅ FCM topic push sent for college ${collegeId}`);
+    } catch (fcmErr) {
+      console.error('FCM topic push error:', fcmErr.message);
+    }
+
     res.status(201).json({
       message: 'Registration details submitted successfully',
       admission,
@@ -587,10 +653,12 @@ exports.getPublicFormOptions = async (req, res) => {
 
     res.json({
       collegeName: college ? college.collegeName : '',
-      branches: branches.map(b => b.name),
+      branches: Array.from(new Set(branches.map(b => b.name?.trim()).filter(Boolean))),
       sessions,
       years: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-      courses: departments.length > 0 ? departments.map(d => d.name) : ['B.Tech', 'M.Tech', 'Diploma', 'BCA', 'MCA', 'BBA', 'MBA', 'B.Sc', 'M.Sc']
+      courses: departments.length > 0 
+        ? Array.from(new Set(departments.map(d => d.name?.trim()).filter(Boolean)))
+        : ['B.Tech', 'M.Tech', 'Diploma', 'BCA', 'MCA', 'BBA', 'MBA', 'B.Sc', 'M.Sc']
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching form options', error: error.message });

@@ -3,9 +3,9 @@ const Employee = require('../models/Employee');
 const Student = require('../models/Student');
 const jwt = require('jsonwebtoken');
 
-// Generate JWT containing user ID and role
-const generateToken = (id, role) => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET || 'secret123', {
+// Generate JWT containing user ID, role, and collegeId
+const generateToken = (id, role, collegeId) => {
+  return jwt.sign({ id, role, collegeId }, process.env.JWT_SECRET || 'secret123', {
     expiresIn: '30d',
   });
 };
@@ -32,7 +32,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         role: 'college_admin',
         collegeId: college._id,
         department: 'Administration',
-        token: generateToken(college._id, 'college_admin'),
+        token: generateToken(college._id, 'college_admin', college._id),
       });
     }
 
@@ -64,7 +64,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         department: employee.department,
         collegeId: employee.collegeId,
         permissions: permissions, // Attach permissions
-        token: generateToken(employee._id, employee.role),
+        token: generateToken(employee._id, employee.role, employee.collegeId),
       });
     }
 
@@ -96,7 +96,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         department: teacher.department,
         collegeId: teacher.collegeId,
         permissions: permissions,
-        token: generateToken(teacher._id, 'Teacher'),
+        token: generateToken(teacher._id, 'Teacher', teacher.collegeId),
       });
     }
 
@@ -115,7 +115,8 @@ exports.loginCollegeAdmin = async (req, res) => {
         username: student.username,
         role: 'Student',
         department: student.branch,
-        token: generateToken(student._id, 'Student'),
+        collegeId: student.collegeId,
+        token: generateToken(student._id, 'Student', student.collegeId),
       });
     }
 
@@ -148,7 +149,8 @@ exports.loginCollegeAdmin = async (req, res) => {
               username: registeredStudent.username || registeredStudent.studentId,
               role: 'Student',
               department: registeredStudent.branch,
-              token: generateToken(registeredStudent._id, 'Student'),
+              collegeId: registeredStudent.collegeId,
+              token: generateToken(registeredStudent._id, 'Student', registeredStudent.collegeId),
             });
           }
         }
@@ -162,7 +164,8 @@ exports.loginCollegeAdmin = async (req, res) => {
           username: applicant.appNo,
           role: 'Student', // Pretend to be a student for the portal
           department: applicant.branch,
-          token: generateToken(applicant._id, 'Student'),
+          collegeId: applicant.collegeId,
+          token: generateToken(applicant._id, 'Student', applicant.collegeId),
         });
       }
     }
