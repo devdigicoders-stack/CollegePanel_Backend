@@ -36,19 +36,46 @@ const buildDateFilter = (startDate, endDate, field = 'createdAt') => {
 exports.getFilterOptions = async (req, res) => {
   try {
     const collegeId = req.college._id;
-    const [departments, courses, designations, complaintCategories, hostelBlocks, libraryCategories] = await Promise.all([
+    const [
+      departments,
+      courses,
+      designations,
+      complaintCategories,
+      hostelBlocks,
+      libraryCategories,
+      studentCourses,
+      studentBranches,
+      admissionCourses,
+      admissionBranches
+    ] = await Promise.all([
       Department.find({ collegeId }).select('name'),
       Course.find({ collegeId }).select('name code department'),
       Designation.find({ collegeId }).select('name'),
       Complaint.distinct('category', { collegeId }),
       HostelRoom.distinct('blockName', { collegeId }),
-      LibraryBook.distinct('category', { collegeId })
+      LibraryBook.distinct('category', { collegeId }),
+      Student.distinct('course', { collegeId }),
+      Student.distinct('branch', { collegeId }),
+      Admission.distinct('course', { collegeId }),
+      Admission.distinct('branch', { collegeId })
     ]);
 
+    // Consolidate & deduplicate all courses & branches
+    const allCourseSet = new Set();
+    courses.forEach(c => { if (c.name) allCourseSet.add(c.name.trim()); });
+    studentCourses.forEach(c => { if (c) allCourseSet.add(c.trim()); });
+    studentBranches.forEach(b => { if (b) allCourseSet.add(b.trim()); });
+    admissionCourses.forEach(c => { if (c) allCourseSet.add(c.trim()); });
+    admissionBranches.forEach(b => { if (b) allCourseSet.add(b.trim()); });
+
+    const allDeptSet = new Set();
+    departments.forEach(d => { if (d.name) allDeptSet.add(d.name.trim()); });
+    courses.forEach(c => { if (c.department) allDeptSet.add(c.department.trim()); });
+
     res.json({
-      departments: departments.map(d => d.name),
-      courses: courses.map(c => c.name),
-      designations: designations.map(d => d.name),
+      departments: Array.from(allDeptSet).filter(Boolean).sort(),
+      courses: Array.from(allCourseSet).filter(Boolean).sort(),
+      designations: Array.from(new Set(designations.map(d => d.name?.trim()))).filter(Boolean).sort(),
       complaintCategories: complaintCategories.filter(Boolean),
       hostelBlocks: hostelBlocks.filter(Boolean),
       libraryCategories: libraryCategories.filter(Boolean)
@@ -70,17 +97,39 @@ exports.getAdmissionsReport = async (req, res) => {
     const dateFilter = buildDateFilter(startDate, endDate, 'createdAt');
     const baseFilter = { collegeId, ...dateFilter };
     
-    if (status && status !== 'All') baseFilter.status = status;
-    if (stage && stage !== 'All') baseFilter.stage = stage;
-    if (course && course !== 'All') baseFilter.course = course;
+    const andConditions = [];
+
+    if (status && status !== 'All') {
+      andConditions.push({ status: { $regex: new RegExp(`^${status.trim()}$`, 'i') } });
+    }
+    if (stage && stage !== 'All') {
+      andConditions.push({ stage: { $regex: new RegExp(`^${stage.trim()}$`, 'i') } });
+    }
+    if (course && course !== 'All') {
+      const cRegex = new RegExp(course.trim(), 'i');
+      andConditions.push({
+        $or: [
+          { course: { $regex: cRegex } },
+          { branch: { $regex: cRegex } },
+          { stream: { $regex: cRegex } },
+          { department: { $regex: cRegex } }
+        ]
+      });
+    }
     if (search && search.trim()) {
       const s = search.trim();
-      baseFilter.$or = [
-        { appNo: { $regex: s, $options: 'i' } },
-        { name: { $regex: s, $options: 'i' } },
-        { email: { $regex: s, $options: 'i' } },
-        { mobile: { $regex: s, $options: 'i' } }
-      ];
+      andConditions.push({
+        $or: [
+          { appNo: { $regex: s, $options: 'i' } },
+          { name: { $regex: s, $options: 'i' } },
+          { email: { $regex: s, $options: 'i' } },
+          { mobile: { $regex: s, $options: 'i' } }
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      baseFilter.$and = andConditions;
     }
 
     let data = [];
@@ -92,7 +141,7 @@ exports.getAdmissionsReport = async (req, res) => {
       data = admissions.map(a => ({
         'App No': a.appNo,
         'Name': a.name,
-        'Course': a.course || '-',
+        'Course': a.course || a.branch || '-',
         'Stage': a.stage || '-',
         'Gender': a.gender || '-',
         'Mobile': a.mobile || '-',
@@ -101,13 +150,11 @@ exports.getAdmissionsReport = async (req, res) => {
         'Date': new Date(a.createdAt).toLocaleDateString('en-IN')
       }));
     } else if (reportType === 'Course-wise Registrations') {
-      const courseFilter = { collegeId, ...dateFilter };
-      if (course && course !== 'All') courseFilter.course = course;
-      const admissions = await Admission.find(courseFilter);
+      const admissions = await Admission.find(baseFilter);
       
       const courseMap = {};
       admissions.forEach(a => {
-        const cName = a.course || 'Unassigned';
+        const cName = a.course || a.branch || 'Unassigned';
         if (!courseMap[cName]) {
           courseMap[cName] = { total: 0, admitted: 0, pending: 0, rejected: 0 };
         }
@@ -126,30 +173,25 @@ exports.getAdmissionsReport = async (req, res) => {
         'Rejected': stats.rejected
       }));
     } else if (reportType === 'Pending Verifications') {
-      const pendingFilter = { 
-        collegeId, 
-        $or: [
-          { stage: 'Document Verification' }, 
-          { stage: 'Registration' },
-          { status: 'Pending' }
-        ],
-        ...dateFilter 
-      };
-      if (course && course !== 'All') pendingFilter.course = course;
-      if (search && search.trim()) {
-        const s = search.trim();
-        pendingFilter.$or = [
-          { appNo: { $regex: s, $options: 'i' } },
-          { name: { $regex: s, $options: 'i' } },
-          { mobile: { $regex: s, $options: 'i' } }
-        ];
+      const pendingBase = { ...baseFilter };
+      const pendingStages = [
+        { stage: { $regex: /verification/i } },
+        { stage: { $regex: /registration/i } },
+        { status: { $regex: /pending/i } }
+      ];
+
+      if (pendingBase.$and) {
+        pendingBase.$and.push({ $or: pendingStages });
+      } else {
+        pendingBase.$or = pendingStages;
       }
-      const admissions = await Admission.find(pendingFilter).sort({ createdAt: -1 });
+
+      const admissions = await Admission.find(pendingBase).sort({ createdAt: -1 });
       columns = ['App No', 'Name', 'Course', 'Mobile', 'Email', 'Stage', 'Status', 'Date'];
       data = admissions.map(a => ({
         'App No': a.appNo,
         'Name': a.name,
-        'Course': a.course || '-',
+        'Course': a.course || a.branch || '-',
         'Mobile': a.mobile || '-',
         'Email': a.email || '-',
         'Stage': a.stage || 'Document Verification',
@@ -176,33 +218,67 @@ exports.getAcademicReport = async (req, res) => {
 
     if (reportType === 'Student Directory') {
       const studentFilter = { collegeId, ...dateFilter };
-      if (course && course !== 'All') studentFilter.course = course;
-      if (branch && branch !== 'All') studentFilter.branch = branch;
-      if (year && year !== 'All') studentFilter.year = year;
-      if (status && status !== 'All') studentFilter.status = status;
+      const andConditions = [];
+
+      if (course && course !== 'All') {
+        const cRegex = new RegExp(course.trim(), 'i');
+        andConditions.push({
+          $or: [
+            { course: { $regex: cRegex } },
+            { branch: { $regex: cRegex } }
+          ]
+        });
+      }
+
+      if (branch && branch !== 'All') {
+        andConditions.push({ branch: { $regex: new RegExp(branch.trim(), 'i') } });
+      }
+
+      if (year && year !== 'All') {
+        andConditions.push({
+          $or: [
+            { year: { $regex: new RegExp(year.trim(), 'i') } },
+            { semester: { $regex: new RegExp(year.trim(), 'i') } }
+          ]
+        });
+      }
+
+      if (status && status !== 'All') {
+        andConditions.push({ status: { $regex: new RegExp(`^${status.trim()}$`, 'i') } });
+      }
+
       if (search && search.trim()) {
         const s = search.trim();
-        studentFilter.$or = [
-          { studentId: { $regex: s, $options: 'i' } },
-          { rollNumber: { $regex: s, $options: 'i' } },
-          { studentName: { $regex: s, $options: 'i' } },
-          { mobileNumber: { $regex: s, $options: 'i' } }
-        ];
+        andConditions.push({
+          $or: [
+            { studentId: { $regex: s, $options: 'i' } },
+            { rollNumber: { $regex: s, $options: 'i' } },
+            { rollNo: { $regex: s, $options: 'i' } },
+            { studentName: { $regex: s, $options: 'i' } },
+            { mobileNumber: { $regex: s, $options: 'i' } },
+            { phone: { $regex: s, $options: 'i' } },
+            { email: { $regex: s, $options: 'i' } }
+          ]
+        });
+      }
+
+      if (andConditions.length > 0) {
+        studentFilter.$and = andConditions;
       }
 
       const students = await Student.find(studentFilter).sort({ createdAt: -1 });
       columns = ['Student ID', 'Roll No', 'Name', 'Course', 'Branch', 'Year', 'Gender', 'Mobile', 'Status', 'Enrollment Date'];
       data = students.map(s => ({
-        'Student ID': s.studentId,
-        'Roll No': s.rollNumber || '-',
+        'Student ID': s.studentId || '-',
+        'Roll No': s.rollNo || s.rollNumber || '-',
         'Name': s.studentName,
         'Course': s.course || '-',
         'Branch': s.branch || '-',
-        'Year': s.year || '-',
+        'Year': s.year || s.semester || '-',
         'Gender': s.gender || '-',
-        'Mobile': s.mobileNumber || '-',
+        'Mobile': s.phone || s.mobileNumber || '-',
         'Status': s.status || 'Active',
-        'Enrollment Date': s.enrollmentDate ? new Date(s.enrollmentDate).toLocaleDateString('en-IN') : '-'
+        'Enrollment Date': s.enrollmentDate ? new Date(s.enrollmentDate).toLocaleDateString('en-IN') : (s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '-')
       }));
     } else if (reportType === 'Faculty Directory') {
       // Query actual Teacher model
@@ -235,7 +311,13 @@ exports.getAcademicReport = async (req, res) => {
       }));
     } else if (reportType === 'Assignments') {
       const assignmentFilter = { collegeId, ...dateFilter };
-      if (course && course !== 'All') assignmentFilter.course = course;
+      if (course && course !== 'All') {
+        const cRegex = new RegExp(course.trim(), 'i');
+        assignmentFilter.$or = [
+          { course: { $regex: cRegex } },
+          { subject: { $regex: cRegex } }
+        ];
+      }
       if (status && status !== 'All') assignmentFilter.status = status;
       if (search && search.trim()) {
         assignmentFilter.title = { $regex: search.trim(), $options: 'i' };
@@ -267,8 +349,11 @@ exports.getAcademicReport = async (req, res) => {
         (att.records || []).forEach(r => {
           const st = r.studentId;
           if (st) {
-            if (status && status !== 'All' && r.status !== status) return;
-            if (course && course !== 'All' && st.course !== course) return;
+            if (status && status !== 'All' && String(r.status).toLowerCase() !== status.toLowerCase()) return;
+            if (course && course !== 'All') {
+              const cRegex = new RegExp(course.trim(), 'i');
+              if (!cRegex.test(st.course || '') && !cRegex.test(st.branch || '')) return;
+            }
             if (search && search.trim()) {
               const q = search.trim().toLowerCase();
               if (!st.studentName?.toLowerCase().includes(q) && !st.studentId?.toLowerCase().includes(q)) return;
@@ -276,7 +361,7 @@ exports.getAcademicReport = async (req, res) => {
             data.push({
               'Student ID': st.studentId || '-',
               'Student Name': st.studentName || '-',
-              'Course': st.course || '-',
+              'Course': st.course || st.branch || '-',
               'Date': attDate,
               'Teacher': teacherName,
               'Status': r.status || 'Present',
@@ -287,7 +372,13 @@ exports.getAcademicReport = async (req, res) => {
       });
     } else if (reportType === 'Study Materials') {
       const matFilter = { collegeId, ...dateFilter };
-      if (course && course !== 'All') matFilter.course = course;
+      if (course && course !== 'All') {
+        const cRegex = new RegExp(course.trim(), 'i');
+        matFilter.$or = [
+          { course: { $regex: cRegex } },
+          { subject: { $regex: cRegex } }
+        ];
+      }
       if (search && search.trim()) {
         matFilter.title = { $regex: search.trim(), $options: 'i' };
       }

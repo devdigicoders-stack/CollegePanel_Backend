@@ -40,7 +40,30 @@ const collegeSchema = new mongoose.Schema({
   password: { type: String, required: true },
   rawPassword: { type: String }, // Storing plaintext password as requested by user
   isActive: { type: Boolean, default: true },
-  fcmTokens: [{ type: String }]
+  fcmTokens: [{ type: String }],
+
+  // Dynamic Premium Licensing & Modules
+  isPremiumUnlocked: { type: Boolean, default: false },
+  unlockedModules: [{ 
+    type: String, 
+    enum: ['hostel', 'mess', 'library', 'complaints', 'security', 'all'] 
+  }],
+
+  // Embedded Upgrade Requests (Zero new collections required)
+  upgradeRequests: [{
+    contactPerson: { type: String, required: true },
+    phone: { type: String, required: true },
+    moduleName: { type: String, required: true },
+    moduleKey: { type: String, required: true },
+    moduleKeys: [{ type: String }],
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected', 'Locked', 'Inactive'], default: 'Pending' },
+    notes: { type: String, default: '' },
+    approvedAt: { type: Date },
+    rejectedAt: { type: Date },
+    lockedAt: { type: Date },
+    actionBy: { type: String, default: 'SuperAdmin' },
+    createdAt: { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 // Hash password before saving

@@ -63,8 +63,10 @@ const placementRoutes = require('./routes/placementRoutes');
 const messRoutes = require('./routes/messRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const studyMaterialRoutes = require('./routes/studyMaterialRoutes');
+const upgradeRequestRoutes = require('./routes/upgradeRequestRoutes');
 
 app.use('/api', indexRoutes);
+app.use('/api/upgrade-requests', upgradeRequestRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/superadmin/academics', superAdminAcademicsRoutes);
 app.use('/api/colleges', collegeRoutes);

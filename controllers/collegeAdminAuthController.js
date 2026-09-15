@@ -32,6 +32,8 @@ exports.loginCollegeAdmin = async (req, res) => {
         role: 'college_admin',
         collegeId: college._id,
         department: 'Administration',
+        isPremiumUnlocked: college.isPremiumUnlocked || false,
+        unlockedModules: college.unlockedModules || [],
         token: generateToken(college._id, 'college_admin', college._id),
       });
     }
@@ -64,6 +66,8 @@ exports.loginCollegeAdmin = async (req, res) => {
         department: employee.department,
         collegeId: employee.collegeId,
         permissions: permissions, // Attach permissions
+        isPremiumUnlocked: collegeDetail ? (collegeDetail.isPremiumUnlocked || false) : false,
+        unlockedModules: collegeDetail ? (collegeDetail.unlockedModules || []) : [],
         token: generateToken(employee._id, employee.role, employee.collegeId),
       });
     }
@@ -287,7 +291,9 @@ exports.getMe = async (req, res) => {
 
     res.status(200).json({
       ...userDetail,
-      permissions
+      permissions,
+      isPremiumUnlocked: req.college ? (req.college.isPremiumUnlocked || false) : false,
+      unlockedModules: req.college ? (req.college.unlockedModules || []) : []
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching profile info', error: error.message });
