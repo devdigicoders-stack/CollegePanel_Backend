@@ -59,7 +59,7 @@ exports.loginCollegeAdmin = async (req, res) => {
       return res.json({
         _id: employee._id,
         name: employee.name,
-        collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+        collegeName: collegeDetail ? collegeDetail.collegeName : 'DigiCampusPro',
         email: employee.email,
         username: employee.username,
         role: employee.role, // e.g. 'Principal', 'Hostel Warden', etc.
@@ -92,7 +92,7 @@ exports.loginCollegeAdmin = async (req, res) => {
       return res.json({
         _id: teacher._id,
         name: teacher.name,
-        collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+        collegeName: collegeDetail ? collegeDetail.collegeName : 'DigiCampusPro',
         email: teacher.email,
         username: teacher.username,
         role: 'Teacher',
@@ -114,7 +114,7 @@ exports.loginCollegeAdmin = async (req, res) => {
       return res.json({
         _id: student._id,
         name: student.studentName,
-        collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+        collegeName: collegeDetail ? collegeDetail.collegeName : 'DigiCampusPro',
         email: student.email,
         username: student.username,
         role: 'Student',
@@ -148,7 +148,7 @@ exports.loginCollegeAdmin = async (req, res) => {
             return res.json({
               _id: registeredStudent._id,
               name: registeredStudent.studentName,
-              collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+              collegeName: collegeDetail ? collegeDetail.collegeName : 'DigiCampusPro',
               email: registeredStudent.email,
               username: registeredStudent.username || registeredStudent.studentId,
               role: 'Student',
@@ -163,7 +163,7 @@ exports.loginCollegeAdmin = async (req, res) => {
         return res.json({
           _id: applicant._id,
           name: applicant.name,
-          collegeName: collegeDetail ? collegeDetail.collegeName : 'Polytechnic College',
+          collegeName: collegeDetail ? collegeDetail.collegeName : 'DigiCampusPro',
           email: applicant.email,
           username: applicant.appNo,
           role: 'Student', // Pretend to be a student for the portal
@@ -234,7 +234,7 @@ exports.getMe = async (req, res) => {
     let userDetail = {};
     let permissions = [];
     const Role = require('../models/Role');
-    const collegeName = req.college ? req.college.collegeName : 'Polytechnic College';
+    const collegeName = req.college ? req.college.collegeName : 'DigiCampusPro';
 
     if (req.college && req.userRole === 'college_admin') {
       userDetail = {
