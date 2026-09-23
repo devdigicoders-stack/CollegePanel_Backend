@@ -16,12 +16,18 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:3000',
   'https://college-panel-admin.vercel.app',
-  'https://college-panel-super-admin.vercel.app'
+  'https://college-panel-super-admin.vercel.app',
+  'https://admin.digicampuspro.com',
+  'https://admin.digicampuspro.com/',
+  'https://superadmin.digicampuspro.com',
+  'https://superadmin.digicampuspro.com/',
+  'https://digicampuspro.com',
+  'https://www.digicampuspro.com'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -64,8 +70,10 @@ const messRoutes = require('./routes/messRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const studyMaterialRoutes = require('./routes/studyMaterialRoutes');
 const upgradeRequestRoutes = require('./routes/upgradeRequestRoutes');
+const enquiryRoutes = require('./routes/enquiryRoutes');
 
 app.use('/api', indexRoutes);
+app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/upgrade-requests', upgradeRequestRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/superadmin/academics', superAdminAcademicsRoutes);
