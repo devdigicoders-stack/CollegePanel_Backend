@@ -998,7 +998,7 @@ exports.getTodayClassesWithAttendance = async (req, res) => {
     const studentIdStr = student._id.toString();
 
     // Use live deployed domain for QR scan so mobile devices scanning the QR open the live application
-    const liveFrontend = process.env.FRONTEND_URL || 'https://college-panel-admin.vercel.app';
+    const liveFrontend = process.env.FRONTEND_URL || 'https://admin.digicampuspro.com';
 
     const classesWithAttendance = allocations.map(alloc => {
       const attRecord = todayAttendances.find(att => att.classId.toString() === alloc._id.toString());
